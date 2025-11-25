@@ -58,6 +58,14 @@ func NewTestSetup(t testing.TB, options ...testkeeper.SetupOption) (sdk.Context,
 
 	_, tk, tms := testkeeper.NewTestSetup(t, options...)
 
+	tk.Initializer.Codec = sample.Codec(
+		banktypes.RegisterInterfaces,
+		cryptocodec.RegisterInterfaces,
+		auctiontypes.RegisterInterfaces,
+		lanetypes.RegisterInterfaces,
+		stakingtypes.RegisterInterfaces,
+	)
+
 	// initialize extra keeper
 	auctionKeeper := Auction(tk.Initializer, tk.AccountKeeper, tk.BankKeeper, tk.DistrKeeper, tk.StakingKeeper)
 
@@ -91,14 +99,6 @@ func NewTestSetup(t testing.TB, options ...testkeeper.SetupOption) (sdk.Context,
 		AuctionMsgServer: auctionMsgSrv,
 		LaneMsgServer:    laneMsgSrv,
 	}
-
-	tk.Initializer.Codec = sample.Codec(
-		banktypes.RegisterInterfaces,
-		cryptocodec.RegisterInterfaces,
-		auctiontypes.RegisterInterfaces,
-		lanetypes.RegisterInterfaces,
-		stakingtypes.RegisterInterfaces,
-	)
 
 	encodingConfig := testtypes.EncodingConfig{
 		InterfaceRegistry: tk.Initializer.Codec.InterfaceRegistry(),

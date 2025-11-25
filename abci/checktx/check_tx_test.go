@@ -396,8 +396,6 @@ type baseApp struct {
 // CommitMultiStore is utilized to retrieve the latest committed state.
 func (ba *baseApp) CommitMultiStore() storetypes.CommitMultiStore {
 	return ba.ctx.MultiStore().(storetypes.CommitMultiStore)
-	// db := db.NewMemDB()
-	// return store.NewCommitMultiStore(db, ba.ctx.Logger(), nil)
 }
 
 // CheckTx is baseapp's CheckTx method that checks the validity of a

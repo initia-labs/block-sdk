@@ -19,7 +19,7 @@ type Keeper struct {
 	authority string
 }
 
-// NewKeeper is a wrapper around NewKeeperWithRewardsAddressProvider for backwards compatibility.
+// NewKeeper is a new keeper for the lane module.
 func NewKeeper(
 	cdc codec.BinaryCodec,
 	storeKey storetypes.StoreKey,

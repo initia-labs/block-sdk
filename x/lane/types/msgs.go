@@ -6,9 +6,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 )
 
-var (
-	_ sdk.Msg = &MsgUpdateParams{}
-)
+var _ sdk.Msg = &MsgUpdateParams{}
 
 // GetSignBytes implements the LegacyMsg interface.
 func (m MsgUpdateParams) GetSignBytes() []byte {

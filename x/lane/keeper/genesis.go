@@ -6,9 +6,9 @@ import (
 	"github.com/skip-mev/block-sdk/v2/x/lane/types"
 )
 
-// InitGenesis initializes the auction module's state from a given genesis state.
+// InitGenesis initializes the lane module's state from a given genesis state.
 func (k Keeper) InitGenesis(ctx sdk.Context, gs types.GenesisState) {
-	// Set the auction module's parameters.
+	// Set the lane module's parameters.
 	if err := k.SetParams(ctx, gs.Params); err != nil {
 		panic(err)
 	}
@@ -16,7 +16,7 @@ func (k Keeper) InitGenesis(ctx sdk.Context, gs types.GenesisState) {
 
 // ExportGenesis returns a GenesisState for a given context.
 func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
-	// Get the auction module's parameters.
+	// Get the lane module's parameters.
 	params, err := k.GetParams(ctx)
 	if err != nil {
 		panic(err)

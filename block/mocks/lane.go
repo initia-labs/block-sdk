@@ -318,7 +318,8 @@ func (_m *Lane) Select(_a0 context.Context, _a1 [][]byte) mempool.Iterator {
 func NewLane(t interface {
 	mock.TestingT
 	Cleanup(func())
-}) *Lane {
+},
+) *Lane {
 	mock := &Lane{}
 	mock.Mock.Test(t)
 
