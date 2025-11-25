@@ -8,6 +8,8 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"github.com/skip-mev/block-sdk/v2/block"
+
+	blocktypes "github.com/skip-mev/block-sdk/v2/block/types"
 )
 
 var _ block.Lane = (*BaseLane)(nil)
@@ -42,6 +44,9 @@ type BaseLane struct { //nolint
 	// verified and the lane needs to verify that the transactions included in the proposal
 	// are valid respecting the verification logic of the lane.
 	processLaneHandler ProcessLaneHandler
+
+	// laneKeeper is the keeper that is responsible for storing the lane parameters.
+	laneKeeper blocktypes.LaneKeeper
 }
 
 // NewBaseLane returns a new lane base. When creating this lane, the type
@@ -50,18 +55,27 @@ type BaseLane struct { //nolint
 func NewBaseLane(
 	cfg LaneConfig,
 	laneName string,
+	laneKeeper blocktypes.LaneKeeper,
 	options ...LaneOption,
 ) (*BaseLane, error) {
 	lane := &BaseLane{
-		cfg:      cfg,
-		laneName: laneName,
+		cfg:        cfg,
+		laneName:   laneName,
+		laneKeeper: laneKeeper,
 	}
 
-	lane.LaneMempool = NewMempool(
+	mempool, err := NewMempool(
+		laneName,
 		DefaultTxPriority(),
 		lane.cfg.SignerExtractor,
-		lane.cfg.MaxTxs,
+		lane.cfg.TxEncoder,
+		laneKeeper,
 	)
+	if err != nil {
+		return nil, err
+	}
+
+	lane.LaneMempool = mempool
 
 	lane.matchHandler = DefaultMatchHandler()
 
@@ -107,6 +121,10 @@ func (l *BaseLane) ValidateBasic() error {
 		return fmt.Errorf("process lane handler cannot be nil")
 	}
 
+	if l.laneKeeper == nil {
+		return fmt.Errorf("lane keeper cannot be nil")
+	}
+
 	return nil
 }
 
@@ -138,16 +156,12 @@ func (l *BaseLane) TxEncoder() sdk.TxEncoder {
 	return l.cfg.TxEncoder
 }
 
-// GetMaxBlockSpace returns the maximum amount of block space that the lane is
-// allowed to consume as a percentage of the total block space.
-func (l *BaseLane) GetMaxBlockSpace() math.LegacyDec {
-	return l.cfg.MaxBlockSpace
+func (l *BaseLane) GetRatio(ctx sdk.Context) (math.LegacyDec, error) {
+	return l.laneKeeper.Ratio(ctx, l.laneName)
 }
 
-// SetMaxBlockSpace sets the maximum amount of block space that the lane is
-// allowed to consume as a percentage of the total block space.
-func (l *BaseLane) SetMaxBlockSpace(maxBlockSpace math.LegacyDec) {
-	l.cfg.MaxBlockSpace = maxBlockSpace
+func (l *BaseLane) GetMaxTxs(ctx sdk.Context) (int64, error) {
+	return l.laneKeeper.MaxTxs(ctx, l.laneName)
 }
 
 // WithOptions returns a new lane with the given options.

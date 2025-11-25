@@ -536,7 +536,9 @@ func (s *MEVTestSuite) TestProcessLane() {
 func (s *MEVTestSuite) TestVerifyBidBasic() {
 	lane := s.InitLane(math.LegacyOneDec(), nil, false)
 	proposal := proposals.NewProposal(log.NewNopLogger(), 200, 100)
-	limits := proposal.GetLaneLimits(lane.GetMaxBlockSpace())
+	ratio, err := lane.GetRatio(s.Ctx)
+	s.Require().NoError(err)
+	limits := proposal.GetLaneLimits(ratio)
 
 	handler := mev.NewProposalHandler(lane.BaseLane, lane.Factory)
 
@@ -602,7 +604,9 @@ func (s *MEVTestSuite) TestVerifyBidBasic() {
 
 		size := s.getTxSize(bidTx)
 		proposal := proposals.NewProposal(log.NewNopLogger(), size-1, 100)
-		limits := proposal.GetLaneLimits(lane.GetMaxBlockSpace())
+		ratio, err := lane.GetRatio(s.Ctx)
+		s.Require().NoError(err)
+		limits := proposal.GetLaneLimits(ratio)
 
 		_, err = handler.VerifyBidBasic(s.Ctx, bidTx, proposal, limits)
 		s.Require().Error(err)

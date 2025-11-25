@@ -56,13 +56,10 @@ func (t Terminator) ProcessLane(_ sdk.Context, p proposals.Proposal, txs []sdk.T
 	return p, nil
 }
 
-// GetMaxBlockSpace is a no-op
-func (t Terminator) GetMaxBlockSpace() math.LegacyDec {
-	return math.LegacyZeroDec()
+// GetRatio is a no-op
+func (t Terminator) GetRatio(_ sdk.Context) (math.LegacyDec, error) {
+	return math.LegacyZeroDec(), nil
 }
-
-// SetMaxBlockSpace is a no-op
-func (t Terminator) SetMaxBlockSpace(_ math.LegacyDec) {}
 
 // Logger is a no-op
 func (t Terminator) Logger() log.Logger {

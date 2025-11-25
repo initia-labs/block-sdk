@@ -127,7 +127,17 @@ func (m MempoolParityCheckTx) CheckTx() CheckTx {
 		}
 
 		consensusParams := sdkCtx.ConsensusParams()
-		laneSize := lane.GetMaxBlockSpace().MulInt64(consensusParams.GetBlock().GetMaxBytes()).TruncateInt64()
+		ratio, err := lane.GetRatio(sdkCtx)
+		if err != nil {
+			return sdkerrors.ResponseCheckTxWithEvents(
+				err,
+				0,
+				0,
+				nil,
+				false,
+			), nil
+		}
+		laneSize := ratio.MulInt64(consensusParams.GetBlock().GetMaxBytes()).TruncateInt64()
 
 		txSize := int64(len(req.Tx))
 		if txSize > laneSize {

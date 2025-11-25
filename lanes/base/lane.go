@@ -2,6 +2,7 @@ package base
 
 import (
 	"github.com/skip-mev/block-sdk/v2/block/base"
+	blocktypes "github.com/skip-mev/block-sdk/v2/block/types"
 )
 
 const (
@@ -14,7 +15,7 @@ const (
 // The default lane accepts any transaction. The default lane builds and verifies blocks
 // in a similar fashion to how the CometBFT/Tendermint consensus engine builds and verifies
 // blocks pre SDK version 0.47.0.
-func NewDefaultLane(cfg base.LaneConfig, matchHandler base.MatchHandler) *base.BaseLane {
+func NewDefaultLane(cfg base.LaneConfig, matchHandler base.MatchHandler, laneKeeper blocktypes.LaneKeeper) *base.BaseLane {
 	options := []base.LaneOption{
 		base.WithMatchHandler(matchHandler),
 	}
@@ -22,6 +23,7 @@ func NewDefaultLane(cfg base.LaneConfig, matchHandler base.MatchHandler) *base.B
 	lane, err := base.NewBaseLane(
 		cfg,
 		LaneName,
+		laneKeeper,
 		options...,
 	)
 	if err != nil {

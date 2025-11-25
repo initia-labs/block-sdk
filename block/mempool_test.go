@@ -7,8 +7,6 @@ import (
 
 	"cosmossdk.io/log"
 	"cosmossdk.io/math"
-	storetypes "cosmossdk.io/store/types"
-	"github.com/cosmos/cosmos-sdk/testutil"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/stretchr/testify/suite"
 
@@ -19,7 +17,13 @@ import (
 	"github.com/skip-mev/block-sdk/v2/lanes/free"
 	"github.com/skip-mev/block-sdk/v2/lanes/mev"
 	testutils "github.com/skip-mev/block-sdk/v2/testutils"
-	auctiontypes "github.com/skip-mev/block-sdk/v2/x/auction/types"
+	testkeeper "github.com/skip-mev/block-sdk/v2/testutils/keeper"
+	testtypes "github.com/skip-mev/block-sdk/v2/testutils/types"
+
+	lanekeeper "github.com/skip-mev/block-sdk/v2/x/lane/keeper"
+	lanetypes "github.com/skip-mev/block-sdk/v2/x/lane/types"
+
+	tmprototypes "github.com/cometbft/cometbft/proto/tendermint/types"
 )
 
 type BlockBusterTestSuite struct {
@@ -27,7 +31,7 @@ type BlockBusterTestSuite struct {
 	ctx sdk.Context
 
 	// Define basic tx configuration
-	encodingConfig testutils.EncodingConfig
+	encodingConfig testtypes.EncodingConfig
 
 	// Define all of the lanes utilized in the test suite
 	mevLane       *mev.MEVLane
@@ -42,6 +46,9 @@ type BlockBusterTestSuite struct {
 	accounts []testutils.Account
 	random   *rand.Rand
 	nonces   map[string]uint64
+
+	laneKeeper    lanekeeper.Keeper
+	laneMsgServer lanetypes.MsgServer
 }
 
 func TestBlockBusterTestSuite(t *testing.T) {
@@ -50,11 +57,22 @@ func TestBlockBusterTestSuite(t *testing.T) {
 
 func (suite *BlockBusterTestSuite) SetupTest() {
 	// General config for transactions and randomness for the test suite
-	suite.encodingConfig = testutils.CreateTestEncodingConfig()
+	// suite.encodingConfig = testutils.CreateTestEncodingConfig()
+	ctx, encodingConfig, testKeepers, testMsgServers := testkeeper.NewTestSetup(suite.T())
+	// suite.ctx = ctx
+	suite.encodingConfig = encodingConfig
+	suite.laneKeeper = testKeepers.LaneKeeper
+	suite.laneMsgServer = testMsgServers.LaneMsgServer
+
 	suite.random = rand.New(rand.NewSource(time.Now().Unix()))
-	key := storetypes.NewKVStoreKey(auctiontypes.StoreKey)
-	testCtx := testutil.DefaultContextWithDB(suite.T(), key, storetypes.NewTransientStoreKey("transient_test"))
-	suite.ctx = testCtx.Ctx.WithBlockHeight(1)
+	// key := storetypes.NewKVStoreKey(auctiontypes.StoreKey)
+	// testCtx := testutil.DefaultContextWithDB(suite.T(), key, storetypes.NewTransientStoreKey("transient_test"))
+	suite.ctx = ctx.WithBlockHeight(1).WithConsensusParams(tmprototypes.ConsensusParams{
+		Block: &tmprototypes.BlockParams{
+			MaxBytes: 10000,
+			MaxGas:   10000,
+		},
+	})
 
 	// Lanes configuration
 	//
@@ -66,13 +84,14 @@ func (suite *BlockBusterTestSuite) SetupTest() {
 		TxDecoder:       suite.encodingConfig.TxConfig.TxDecoder(),
 		SignerExtractor: signer_extraction.NewDefaultAdapter(),
 		AnteHandler:     nil,
-		MaxBlockSpace:   math.LegacyMustNewDecFromStr("0.3"),
+		// MaxBlockSpace:   math.LegacyMustNewDecFromStr("0.3"),
 	}
 	factory := mev.NewDefaultAuctionFactory(suite.encodingConfig.TxConfig.TxDecoder(), signer_extraction.NewDefaultAdapter())
 	suite.mevLane = mev.NewMEVLane(
 		mevConfig,
 		factory,
 		factory.MatchHandler(),
+		suite.laneKeeper,
 	)
 
 	// Free lane set up
@@ -82,12 +101,13 @@ func (suite *BlockBusterTestSuite) SetupTest() {
 		TxDecoder:       suite.encodingConfig.TxConfig.TxDecoder(),
 		SignerExtractor: signer_extraction.NewDefaultAdapter(),
 		AnteHandler:     nil,
-		MaxBlockSpace:   math.LegacyMustNewDecFromStr("0.3"),
+		// MaxBlockSpace:   math.LegacyMustNewDecFromStr("0.3"),
 	}
 	suite.freeLane = free.NewFreeLane(
 		freeConfig,
 		base.DefaultTxPriority(),
 		free.DefaultMatchHandler(),
+		suite.laneKeeper,
 	)
 
 	// Base lane set up
@@ -97,17 +117,38 @@ func (suite *BlockBusterTestSuite) SetupTest() {
 		TxDecoder:       suite.encodingConfig.TxConfig.TxDecoder(),
 		SignerExtractor: signer_extraction.NewDefaultAdapter(),
 		AnteHandler:     nil,
-		MaxBlockSpace:   math.LegacyZeroDec(),
+		// MaxBlockSpace:   math.LegacyZeroDec(),
 	}
 	suite.baseLane = defaultlane.NewDefaultLane(
 		baseConfig,
 		base.DefaultMatchHandler(),
+		suite.laneKeeper,
 	)
+
+	err := suite.laneKeeper.SetParams(suite.ctx, lanetypes.Params{
+		Lanes: []lanetypes.LaneParams{
+			{
+				Name:   "mev",
+				Ratio:  math.LegacyMustNewDecFromStr("0.3"),
+				MaxTxs: 0, // unlimited
+			},
+			{
+				Name:   "free",
+				Ratio:  math.LegacyMustNewDecFromStr("0.3"),
+				MaxTxs: 0, // unlimited
+			},
+			{
+				Name:   "default",
+				Ratio:  math.LegacyZeroDec(),
+				MaxTxs: 0, // unlimited
+			},
+		},
+	})
+	suite.Require().NoError(err)
 
 	// Mempool set up
 	suite.lanes = []block.Lane{suite.mevLane, suite.freeLane, suite.baseLane}
 
-	var err error
 	suite.mempool, err = block.NewLanedMempool(
 		log.NewNopLogger(),
 		suite.lanes,
@@ -129,7 +170,7 @@ func (suite *BlockBusterTestSuite) TestNewMempool() {
 		TxDecoder:       suite.encodingConfig.TxConfig.TxDecoder(),
 		SignerExtractor: signer_extraction.NewDefaultAdapter(),
 		AnteHandler:     nil,
-		MaxBlockSpace:   math.LegacyZeroDec(),
+		// MaxBlockSpace:   math.LegacyZeroDec(),
 	}
 
 	baseConfig := base.LaneConfig{
@@ -138,32 +179,67 @@ func (suite *BlockBusterTestSuite) TestNewMempool() {
 		TxDecoder:       suite.encodingConfig.TxConfig.TxDecoder(),
 		SignerExtractor: signer_extraction.NewDefaultAdapter(),
 		AnteHandler:     nil,
-		MaxBlockSpace:   math.LegacyMustNewDecFromStr("0.3"),
+		// MaxBlockSpace:   math.LegacyMustNewDecFromStr("0.3"),
 	}
 
-	defaultLane := defaultlane.NewDefaultLane(defaultConfig, base.DefaultMatchHandler())
+	defaultLane := defaultlane.NewDefaultLane(defaultConfig, base.DefaultMatchHandler(), suite.laneKeeper)
 	factory := mev.NewDefaultAuctionFactory(suite.encodingConfig.TxConfig.TxDecoder(), signer_extraction.NewDefaultAdapter())
 	mevLane := mev.NewMEVLane(
 		baseConfig,
 		factory,
 		factory.MatchHandler(),
+		suite.laneKeeper,
 	)
 	freeLane := free.NewFreeLane(
 		baseConfig,
 		base.DefaultTxPriority(),
 		free.DefaultMatchHandler(),
+		suite.laneKeeper,
 	)
 
 	invalidFreeLane := free.NewFreeLane(
 		defaultConfig,
 		base.DefaultTxPriority(),
 		free.DefaultMatchHandler(),
+		suite.laneKeeper,
 	)
+
+	err := suite.laneKeeper.SetParams(suite.ctx, lanetypes.Params{
+		Lanes: []lanetypes.LaneParams{
+			{
+				Name:   "mev",
+				Ratio:  math.LegacyMustNewDecFromStr("0.3"),
+				MaxTxs: 0, // unlimited
+			},
+			{
+				Name:   "free",
+				Ratio:  math.LegacyMustNewDecFromStr("0.3"),
+				MaxTxs: 0, // unlimited
+			},
+			{
+				Name:   "default",
+				Ratio:  math.LegacyZeroDec(),
+				MaxTxs: 0, // unlimited
+			},
+		},
+	})
+	suite.Require().NoError(err)
 
 	suite.Run("works with a single lane", func() {
 		lanes := []block.Lane{defaultLane}
 
-		_, err := block.NewLanedMempool(
+		err := suite.laneKeeper.SetParams(suite.ctx, lanetypes.Params{
+			Lanes: []lanetypes.LaneParams{
+				{
+					Name:   "default",
+					Ratio:  math.LegacyZeroDec(),
+					MaxTxs: 0, // unlimited
+				},
+			},
+		})
+		suite.Require().NoError(err)
+
+		_, err = block.NewLanedMempool(
 			log.NewNopLogger(),
 			lanes,
 		)
@@ -173,7 +249,23 @@ func (suite *BlockBusterTestSuite) TestNewMempool() {
 	suite.Run("works mev and default lane", func() {
 		lanes := []block.Lane{mevLane, defaultLane}
 
-		_, err := block.NewLanedMempool(
+		err := suite.laneKeeper.SetParams(suite.ctx, lanetypes.Params{
+			Lanes: []lanetypes.LaneParams{
+				{
+					Name:   "mev",
+					Ratio:  math.LegacyMustNewDecFromStr("0.3"),
+					MaxTxs: 0, // unlimited
+				},
+				{
+					Name:   "default",
+					Ratio:  math.LegacyZeroDec(),
+					MaxTxs: 0, // unlimited
+				},
+			},
+		})
+		suite.Require().NoError(err)
+
+		_, err = block.NewLanedMempool(
 			log.NewNopLogger(),
 			lanes,
 		)
@@ -181,7 +273,23 @@ func (suite *BlockBusterTestSuite) TestNewMempool() {
 	})
 
 	suite.Run("works mev and default lane in reverse order", func() {
-		lanes := []block.Lane{mevLane, defaultLane}
+		lanes := []block.Lane{defaultLane, mevLane}
+
+		err = suite.laneKeeper.SetParams(suite.ctx, lanetypes.Params{
+			Lanes: []lanetypes.LaneParams{
+				{
+					Name:   "mev",
+					Ratio:  math.LegacyMustNewDecFromStr("0.3"),
+					MaxTxs: 0, // unlimited
+				},
+				{
+					Name:   "default",
+					Ratio:  math.LegacyZeroDec(),
+					MaxTxs: 0, // unlimited
+				},
+			},
+		})
+		suite.Require().NoError(err)
 
 		_, err := block.NewLanedMempool(
 			log.NewNopLogger(),
@@ -193,6 +301,27 @@ func (suite *BlockBusterTestSuite) TestNewMempool() {
 	suite.Run("works with mev, free, and default lane", func() {
 		lanes := []block.Lane{mevLane, freeLane, defaultLane}
 
+		err = suite.laneKeeper.SetParams(suite.ctx, lanetypes.Params{
+			Lanes: []lanetypes.LaneParams{
+				{
+					Name:   "mev",
+					Ratio:  math.LegacyMustNewDecFromStr("0.3"),
+					MaxTxs: 0, // unlimited
+				},
+				{
+					Name:   "free",
+					Ratio:  math.LegacyMustNewDecFromStr("0.3"),
+					MaxTxs: 0, // unlimited
+				},
+				{
+					Name:   "default",
+					Ratio:  math.LegacyZeroDec(),
+					MaxTxs: 0, // unlimited
+				},
+			},
+		})
+		suite.Require().NoError(err)
+
 		_, err := block.NewLanedMempool(
 			log.NewNopLogger(),
 			lanes,
@@ -202,6 +331,27 @@ func (suite *BlockBusterTestSuite) TestNewMempool() {
 
 	suite.Run("works with mev, default, free lane", func() {
 		lanes := []block.Lane{mevLane, defaultLane, freeLane}
+
+		err = suite.laneKeeper.SetParams(suite.ctx, lanetypes.Params{
+			Lanes: []lanetypes.LaneParams{
+				{
+					Name:   "mev",
+					Ratio:  math.LegacyMustNewDecFromStr("0.3"),
+					MaxTxs: 0, // unlimited
+				},
+				{
+					Name:   "free",
+					Ratio:  math.LegacyMustNewDecFromStr("0.3"),
+					MaxTxs: 0, // unlimited
+				},
+				{
+					Name:   "default",
+					Ratio:  math.LegacyZeroDec(),
+					MaxTxs: 0, // unlimited
+				},
+			},
+		})
+		suite.Require().NoError(err)
 
 		_, err := block.NewLanedMempool(
 			log.NewNopLogger(),
@@ -213,6 +363,27 @@ func (suite *BlockBusterTestSuite) TestNewMempool() {
 	suite.Run("works with free, mev, and default lane", func() {
 		lanes := []block.Lane{freeLane, mevLane, defaultLane}
 
+		err = suite.laneKeeper.SetParams(suite.ctx, lanetypes.Params{
+			Lanes: []lanetypes.LaneParams{
+				{
+					Name:   "mev",
+					Ratio:  math.LegacyMustNewDecFromStr("0.3"),
+					MaxTxs: 0, // unlimited
+				},
+				{
+					Name:   "free",
+					Ratio:  math.LegacyMustNewDecFromStr("0.3"),
+					MaxTxs: 0, // unlimited
+				},
+				{
+					Name:   "default",
+					Ratio:  math.LegacyZeroDec(),
+					MaxTxs: 0, // unlimited
+				},
+			},
+		})
+		suite.Require().NoError(err)
+
 		_, err := block.NewLanedMempool(
 			log.NewNopLogger(),
 			lanes,
@@ -222,6 +393,27 @@ func (suite *BlockBusterTestSuite) TestNewMempool() {
 
 	suite.Run("works with default, free, mev lanes", func() {
 		lanes := []block.Lane{defaultLane, freeLane, mevLane}
+
+		err = suite.laneKeeper.SetParams(suite.ctx, lanetypes.Params{
+			Lanes: []lanetypes.LaneParams{
+				{
+					Name:   "mev",
+					Ratio:  math.LegacyMustNewDecFromStr("0.3"),
+					MaxTxs: 0, // unlimited
+				},
+				{
+					Name:   "free",
+					Ratio:  math.LegacyMustNewDecFromStr("0.3"),
+					MaxTxs: 0, // unlimited
+				},
+				{
+					Name:   "default",
+					Ratio:  math.LegacyZeroDec(),
+					MaxTxs: 0, // unlimited
+				},
+			},
+		})
+		suite.Require().NoError(err)
 
 		_, err := block.NewLanedMempool(
 			log.NewNopLogger(),
@@ -233,25 +425,79 @@ func (suite *BlockBusterTestSuite) TestNewMempool() {
 	suite.Run("default lane not included - invalid total space", func() {
 		lanes := []block.Lane{mevLane, freeLane}
 
-		_, err := block.NewLanedMempool(
+		_, err := suite.laneMsgServer.UpdateParams(suite.ctx, &lanetypes.MsgUpdateParams{
+			Authority: suite.laneKeeper.GetAuthority(),
+			Params: lanetypes.Params{
+				Lanes: []lanetypes.LaneParams{
+					{
+						Name:   "mev",
+						Ratio:  math.LegacyMustNewDecFromStr("0.3"),
+						MaxTxs: 0, // unlimited
+					},
+					{
+						Name:   "free",
+						Ratio:  math.LegacyMustNewDecFromStr("0.3"),
+						MaxTxs: 0, // unlimited
+					},
+				},
+			},
+		})
+		suite.Require().Error(err)
+
+		_, err = block.NewLanedMempool(
 			log.NewNopLogger(),
 			lanes,
 		)
-		suite.Require().Error(err)
+		suite.Require().NoError(err)
 	})
 
 	suite.Run("two lanes with unlimited blockspace", func() {
 		lanes := []block.Lane{defaultLane, invalidFreeLane}
 
-		_, err := block.NewLanedMempool(
+		_, err := suite.laneMsgServer.UpdateParams(suite.ctx, &lanetypes.MsgUpdateParams{
+			Authority: suite.laneKeeper.GetAuthority(),
+			Params: lanetypes.Params{
+				Lanes: []lanetypes.LaneParams{
+					{
+						Name:   "default",
+						Ratio:  math.LegacyZeroDec(),
+						MaxTxs: 0, // unlimited
+					},
+					{
+						Name:   "invalid_free",
+						Ratio:  math.LegacyZeroDec(),
+						MaxTxs: 0, // unlimited
+					},
+				},
+			},
+		})
+		suite.Require().Error(err)
+
+		_, err = block.NewLanedMempool(
 			log.NewNopLogger(),
 			lanes,
 		)
-		suite.Require().Error(err)
+		suite.Require().NoError(err)
 	})
 
 	suite.Run("duplicate lanes", func() {
 		lanes := []block.Lane{mevLane, defaultLane, mevLane}
+
+		err = suite.laneKeeper.SetParams(suite.ctx, lanetypes.Params{
+			Lanes: []lanetypes.LaneParams{
+				{
+					Name:   "mev",
+					Ratio:  math.LegacyMustNewDecFromStr("0.3"),
+					MaxTxs: 0, // unlimited
+				},
+				{
+					Name:   "default",
+					Ratio:  math.LegacyZeroDec(),
+					MaxTxs: 0, // unlimited
+				},
+			},
+		})
+		suite.Require().NoError(err)
 
 		_, err := block.NewLanedMempool(
 			log.NewNopLogger(),

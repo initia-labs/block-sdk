@@ -58,11 +58,8 @@ type Lane interface {
 		next ProcessLanesHandler,
 	) (proposals.Proposal, error)
 
-	// GetMaxBlockSpace returns the max block space for the lane as a relative percentage.
-	GetMaxBlockSpace() math.LegacyDec
-
-	// SetMaxBlockSpace sets the max block space for the lane as a relative percentage.
-	SetMaxBlockSpace(math.LegacyDec)
+	// GetRatio returns the ratio for the lane as a relative percentage.
+	GetRatio(ctx sdk.Context) (math.LegacyDec, error)
 
 	// Name returns the name of the lane.
 	Name() string

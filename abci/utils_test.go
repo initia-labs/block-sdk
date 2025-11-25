@@ -18,6 +18,8 @@ import (
 	defaultlane "github.com/skip-mev/block-sdk/v2/lanes/base"
 	"github.com/skip-mev/block-sdk/v2/lanes/free"
 	"github.com/skip-mev/block-sdk/v2/lanes/mev"
+
+	lanetypes "github.com/skip-mev/block-sdk/v2/x/lane/types"
 )
 
 func (s *ProposalsTestSuite) setUpAnteHandler(expectedExecution map[sdk.Tx]bool) sdk.AnteHandler {
@@ -59,23 +61,47 @@ func (s *ProposalsTestSuite) setUpCustomMatchHandlerLane(maxBlockSpace math.Lega
 		TxEncoder:       s.encodingConfig.TxConfig.TxEncoder(),
 		TxDecoder:       s.encodingConfig.TxConfig.TxDecoder(),
 		AnteHandler:     s.setUpAnteHandler(expectedExecution),
-		MaxBlockSpace:   maxBlockSpace,
 		SignerExtractor: signeradaptors.NewDefaultAdapter(),
 	}
 
 	options := []base.LaneOption{
 		base.WithMatchHandler(mh),
-		base.WithMempoolConfigs(cfg, base.DefaultTxPriority()),
+		base.WithMempoolConfigs(name, cfg, base.DefaultTxPriority()),
 	}
 
 	lane, err := base.NewBaseLane(
 		cfg,
 		name,
+		s.laneKeeper,
 		options...,
 	)
 	s.Require().NoError(err)
 
+	err = s.laneKeeper.AddLaneConfig(s.ctx, lanetypes.LaneParams{
+		Name:  name,
+		Ratio: maxBlockSpace,
+	})
+	s.Require().NoError(err)
+
 	return lane
+}
+
+func (s *ProposalsTestSuite) setUpTestLaneParams() {
+	err := s.laneKeeper.SetParams(s.ctx, lanetypes.Params{
+		Lanes: []lanetypes.LaneParams{
+			{ // to ensure the sum of the ratios is 1
+				Name:   "test",
+				Ratio:  math.LegacyZeroDec(),
+				MaxTxs: 0, // unlimited
+			},
+		},
+	})
+	s.Require().NoError(err)
+}
+
+func (s *ProposalsTestSuite) deleteLaneParams() {
+	err := s.laneKeeper.DeleteParams(s.ctx)
+	s.Require().NoError(err)
 }
 
 func (s *ProposalsTestSuite) setUpStandardLane(maxBlockSpace math.LegacyDec, expectedExecution map[sdk.Tx]bool) *base.BaseLane {
@@ -84,11 +110,16 @@ func (s *ProposalsTestSuite) setUpStandardLane(maxBlockSpace math.LegacyDec, exp
 		TxEncoder:       s.encodingConfig.TxConfig.TxEncoder(),
 		TxDecoder:       s.encodingConfig.TxConfig.TxDecoder(),
 		AnteHandler:     s.setUpAnteHandler(expectedExecution),
-		MaxBlockSpace:   maxBlockSpace,
 		SignerExtractor: signeradaptors.NewDefaultAdapter(),
 	}
 
-	return defaultlane.NewDefaultLane(cfg, base.DefaultMatchHandler())
+	lane := defaultlane.NewDefaultLane(cfg, base.DefaultMatchHandler(), s.laneKeeper)
+	err := s.laneKeeper.AddLaneConfig(s.ctx, lanetypes.LaneParams{
+		Name:  "default",
+		Ratio: maxBlockSpace,
+	})
+	s.Require().NoError(err)
+	return lane
 }
 
 func (s *ProposalsTestSuite) setUpTOBLane(maxBlockSpace math.LegacyDec, expectedExecution map[sdk.Tx]bool) *mev.MEVLane {
@@ -97,12 +128,17 @@ func (s *ProposalsTestSuite) setUpTOBLane(maxBlockSpace math.LegacyDec, expected
 		TxEncoder:       s.encodingConfig.TxConfig.TxEncoder(),
 		TxDecoder:       s.encodingConfig.TxConfig.TxDecoder(),
 		AnteHandler:     s.setUpAnteHandler(expectedExecution),
-		MaxBlockSpace:   maxBlockSpace,
 		SignerExtractor: signeradaptors.NewDefaultAdapter(),
 	}
 
 	factory := mev.NewDefaultAuctionFactory(cfg.TxDecoder, signeradaptors.NewDefaultAdapter())
-	return mev.NewMEVLane(cfg, factory, factory.MatchHandler())
+	lane := mev.NewMEVLane(cfg, factory, factory.MatchHandler(), s.laneKeeper)
+	err := s.laneKeeper.AddLaneConfig(s.ctx, lanetypes.LaneParams{
+		Name:  "mev",
+		Ratio: maxBlockSpace,
+	})
+	s.Require().NoError(err)
+	return lane
 }
 
 func (s *ProposalsTestSuite) setUpFreeLane(maxBlockSpace math.LegacyDec, expectedExecution map[sdk.Tx]bool) *base.BaseLane {
@@ -111,11 +147,16 @@ func (s *ProposalsTestSuite) setUpFreeLane(maxBlockSpace math.LegacyDec, expecte
 		TxEncoder:       s.encodingConfig.TxConfig.TxEncoder(),
 		TxDecoder:       s.encodingConfig.TxConfig.TxDecoder(),
 		AnteHandler:     s.setUpAnteHandler(expectedExecution),
-		MaxBlockSpace:   maxBlockSpace,
 		SignerExtractor: signeradaptors.NewDefaultAdapter(),
 	}
 
-	return free.NewFreeLane(cfg, base.DefaultTxPriority(), free.DefaultMatchHandler())
+	lane := free.NewFreeLane(cfg, base.DefaultTxPriority(), free.DefaultMatchHandler(), s.laneKeeper)
+	err := s.laneKeeper.AddLaneConfig(s.ctx, lanetypes.LaneParams{
+		Name:  "free",
+		Ratio: maxBlockSpace,
+	})
+	s.Require().NoError(err)
+	return lane
 }
 
 func (s *ProposalsTestSuite) setUpPanicLane(name string, maxBlockSpace math.LegacyDec) *base.BaseLane {
@@ -123,13 +164,12 @@ func (s *ProposalsTestSuite) setUpPanicLane(name string, maxBlockSpace math.Lega
 		Logger:          log.NewNopLogger(),
 		TxEncoder:       s.encodingConfig.TxConfig.TxEncoder(),
 		TxDecoder:       s.encodingConfig.TxConfig.TxDecoder(),
-		MaxBlockSpace:   maxBlockSpace,
 		SignerExtractor: signeradaptors.NewDefaultAdapter(),
 	}
 
 	options := []base.LaneOption{
 		base.WithMatchHandler(base.DefaultMatchHandler()),
-		base.WithMempoolConfigs(cfg, base.DefaultTxPriority()),
+		base.WithMempoolConfigs(name, cfg, base.DefaultTxPriority()),
 		base.WithPrepareLaneHandler(base.PanicPrepareLaneHandler()),
 		base.WithProcessLaneHandler(base.PanicProcessLaneHandler()),
 	}
@@ -137,8 +177,15 @@ func (s *ProposalsTestSuite) setUpPanicLane(name string, maxBlockSpace math.Lega
 	lane, err := base.NewBaseLane(
 		cfg,
 		name,
+		s.laneKeeper,
 		options...,
 	)
+	s.Require().NoError(err)
+
+	err = s.laneKeeper.AddLaneConfig(s.ctx, lanetypes.LaneParams{
+		Name:  name,
+		Ratio: maxBlockSpace,
+	})
 	s.Require().NoError(err)
 
 	return lane
