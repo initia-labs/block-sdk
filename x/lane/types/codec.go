@@ -10,14 +10,13 @@ import (
 )
 
 var (
-	amino     = codec.NewLegacyAmino()
 	ModuleCdc = codec.NewLegacyAmino()
 )
 
 func init() {
-	RegisterLegacyAminoCodec(amino)
-	cryptocodec.RegisterCrypto(amino)
-	sdk.RegisterLegacyAminoCodec(amino)
+	RegisterLegacyAminoCodec(ModuleCdc)
+	cryptocodec.RegisterCrypto(ModuleCdc)
+	sdk.RegisterLegacyAminoCodec(ModuleCdc)
 }
 
 // RegisterLegacyAminoCodec registers the necessary x/lane interfaces and
