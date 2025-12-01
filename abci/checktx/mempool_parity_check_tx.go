@@ -136,31 +136,31 @@ func (m MempoolParityCheckTx) CheckTx() CheckTx {
 				nil,
 				false,
 			), nil
-		}
-		laneSize := ratio.MulInt64(consensusParams.GetBlock().GetMaxBytes()).TruncateInt64()
+		} else if ratio.IsPositive() {
+			laneSize := ratio.MulInt64(consensusParams.GetBlock().GetMaxBytes()).TruncateInt64()
 
-		txSize := int64(len(req.Tx))
-		if txSize > laneSize {
-			if isReCheck && txInMempool {
-				removeTx = true
+			txSize := int64(len(req.Tx))
+			if txSize > laneSize {
+				if isReCheck && txInMempool {
+					removeTx = true
+				}
+
+				m.logger.Debug(
+					"tx size exceeds max block bytes",
+					"tx", tx,
+					"tx size", txSize,
+					"max bytes", laneSize,
+				)
+
+				return sdkerrors.ResponseCheckTxWithEvents(
+					fmt.Errorf("tx size exceeds max bytes for lane %s", lane.Name()),
+					0,
+					0,
+					nil,
+					false,
+				), nil
 			}
-
-			m.logger.Debug(
-				"tx size exceeds max block bytes",
-				"tx", tx,
-				"tx size", txSize,
-				"max bytes", laneSize,
-			)
-
-			return sdkerrors.ResponseCheckTxWithEvents(
-				fmt.Errorf("tx size exceeds max bytes for lane %s", lane.Name()),
-				0,
-				0,
-				nil,
-				false,
-			), nil
 		}
-
 		return res, checkTxError
 	}
 }
