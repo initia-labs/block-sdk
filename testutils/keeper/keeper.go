@@ -8,6 +8,7 @@ import (
 	storetypes "cosmossdk.io/store/types"
 	tmproto "github.com/cometbft/cometbft/proto/tendermint/types"
 	"github.com/cosmos/cosmos-sdk/codec"
+	"github.com/cosmos/cosmos-sdk/runtime"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	authkeeper "github.com/cosmos/cosmos-sdk/x/auth/keeper"
 	"github.com/cosmos/cosmos-sdk/x/auth/tx"
@@ -141,11 +142,12 @@ func Lane(
 	stakingKeeper *stakingkeeper.Keeper,
 ) lanekeeper.Keeper {
 	storeKey := storetypes.NewKVStoreKey(lanetypes.StoreKey)
+	storeService := runtime.NewKVStoreService(storeKey)
 	initializer.StateStore.MountStoreWithDB(storeKey, storetypes.StoreTypeIAVL, initializer.DB)
 
 	return lanekeeper.NewKeeper(
 		initializer.Codec,
-		storeKey,
+		storeService,
 		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
 	)
 }

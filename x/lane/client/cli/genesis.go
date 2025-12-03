@@ -27,6 +27,30 @@ func ConfigureLanes(mbm module.BasicManager, txEncCfg client.TxEncodingConfig) *
 
 Example:
 $ %s configure-lanes config.json --home=/path/to/home/dir 
+
+The lane config file should be in the following format:
+[
+	{
+		"name": "system",
+		"ratio": "0.01",
+		"max_txs": 1
+	},
+	{
+		"name": "mev",
+		"ratio": "0.09",
+		"max_txs": 100
+	},
+	{
+		"name": "free",
+		"ratio": "0.1",
+		"max_txs": 100
+	},
+	{
+		"name": "default",
+		"ratio": "0",
+		"max_txs": 0
+	}
+]
 `, version.AppName,
 		),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -60,9 +84,14 @@ $ %s configure-lanes config.json --home=/path/to/home/dir
 
 			laneParams := make(map[string]blocklanetypes.LaneParams)
 			for _, lane := range laneConfig {
+				ratio, err := math.LegacyNewDecFromStr(lane.Ratio)
+				if err != nil {
+					return fmt.Errorf("failed to parse ratio for lane %s: %w", lane.Name, err)
+				}
+
 				laneParams[lane.Name] = blocklanetypes.LaneParams{
 					Name:   lane.Name,
-					Ratio:  math.LegacyMustNewDecFromStr(lane.Ratio),
+					Ratio:  ratio,
 					MaxTxs: int64(lane.MaxTxs),
 				}
 			}
@@ -89,7 +118,7 @@ $ %s configure-lanes config.json --home=/path/to/home/dir
 
 			genDoc.AppState = appStateJSON
 			if err = genutil.ExportGenesisFile(genDoc, config.GenesisFile()); err != nil {
-				return errors.New("Failed to export genesis file")
+				return fmt.Errorf("failed to export genesis file: %w", err)
 			}
 
 			return nil

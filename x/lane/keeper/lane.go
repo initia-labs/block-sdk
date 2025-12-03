@@ -1,10 +1,9 @@
 package keeper
 
 import (
-	"fmt"
-
 	"cosmossdk.io/math"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"github.com/skip-mev/block-sdk/v2/x/lane/types"
 )
 
 func (k Keeper) Ratio(ctx sdk.Context, laneName string) (math.LegacyDec, error) {
@@ -18,7 +17,8 @@ func (k Keeper) Ratio(ctx sdk.Context, laneName string) (math.LegacyDec, error) 
 			return lane.Ratio, nil
 		}
 	}
-	return math.LegacyZeroDec(), fmt.Errorf("lane %s not found", laneName)
+	// If the lane is not found, return a negative ratio to prevent halting the chain
+	return math.LegacyOneDec().Neg(), nil
 }
 
 func (k Keeper) MaxTxs(ctx sdk.Context, laneName string) (int64, error) {
@@ -32,5 +32,5 @@ func (k Keeper) MaxTxs(ctx sdk.Context, laneName string) (int64, error) {
 			return lane.MaxTxs, nil
 		}
 	}
-	return 0, fmt.Errorf("lane %s not found", laneName)
+	return 0, types.ErrLaneNotFound
 }

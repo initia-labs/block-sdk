@@ -5,6 +5,7 @@ import (
 
 	"cosmossdk.io/math"
 	storetypes "cosmossdk.io/store/types"
+	"github.com/cosmos/cosmos-sdk/runtime"
 	"github.com/cosmos/cosmos-sdk/testutil"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/stretchr/testify/require"
@@ -19,11 +20,12 @@ func setupKeeper(t *testing.T) (keeper.Keeper, sdk.Context, sdk.AccAddress) {
 
 	encCfg := testutils.CreateTestEncodingConfig()
 	storeKey := storetypes.NewKVStoreKey(types.StoreKey)
+	storeService := runtime.NewKVStoreService(storeKey)
 	testCtx := testutil.DefaultContextWithDB(t, storeKey, storetypes.NewTransientStoreKey("transient_test"))
 
 	authority := sdk.AccAddress([]byte("authority"))
 
-	return keeper.NewKeeper(encCfg.Codec, storeKey, authority.String()), testCtx.Ctx, authority
+	return keeper.NewKeeper(encCfg.Codec, storeService, authority.String()), testCtx.Ctx, authority
 }
 
 func TestKeeperAuthority(t *testing.T) {

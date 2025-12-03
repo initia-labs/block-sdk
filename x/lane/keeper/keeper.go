@@ -1,9 +1,12 @@
 package keeper
 
 import (
+	"errors"
+
+	"cosmossdk.io/collections"
 	"cosmossdk.io/log"
 
-	storetypes "cosmossdk.io/store/types"
+	corestoretypes "cosmossdk.io/core/store"
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
@@ -11,8 +14,11 @@ import (
 )
 
 type Keeper struct {
-	cdc      codec.BinaryCodec
-	storeKey storetypes.StoreKey
+	cdc          codec.BinaryCodec
+	storeService corestoretypes.KVStoreService
+
+	Schema collections.Schema
+	Params collections.Item[types.Params]
 
 	// The address that is capable of executing a MsgUpdateParams message.
 	// Typically this will be the governance module's address.
@@ -22,14 +28,24 @@ type Keeper struct {
 // NewKeeper is a new keeper for the lane module.
 func NewKeeper(
 	cdc codec.BinaryCodec,
-	storeKey storetypes.StoreKey,
+	storeService corestoretypes.KVStoreService,
+
 	authority string,
 ) Keeper {
-	return Keeper{
-		cdc:       cdc,
-		storeKey:  storeKey,
-		authority: authority,
+	sb := collections.NewSchemaBuilder(storeService)
+
+	k := Keeper{
+		cdc:          cdc,
+		storeService: storeService,
+		Params:       collections.NewItem(sb, types.KeyParams, "params", codec.CollValue[types.Params](cdc)),
+		authority:    authority,
 	}
+	schema, err := sb.Build()
+	if err != nil {
+		panic(err)
+	}
+	k.Schema = schema
+	return k
 }
 
 // Logger returns a lane module-specific logger.
@@ -44,41 +60,22 @@ func (k Keeper) GetAuthority() string {
 
 // GetParams returns the lane module's parameters.
 func (k Keeper) GetParams(ctx sdk.Context) (types.Params, error) {
-	store := ctx.KVStore(k.storeKey)
-
-	key := types.KeyParams
-	bz := store.Get(key)
-
-	if len(bz) == 0 {
+	params, err := k.Params.Get(ctx)
+	if errors.Is(err, collections.ErrNotFound) {
 		return types.Params{}, nil
-	}
-
-	params := types.Params{}
-	if err := params.Unmarshal(bz); err != nil {
+	} else if err != nil {
 		return types.Params{}, err
 	}
-
 	return params, nil
 }
 
 // SetParams sets the lane module's parameters.
 func (k Keeper) SetParams(ctx sdk.Context, params types.Params) error {
-	store := ctx.KVStore(k.storeKey)
-
-	bz, err := params.Marshal()
-	if err != nil {
-		return err
-	}
-
-	store.Set(types.KeyParams, bz)
-
-	return nil
+	return k.Params.Set(ctx, params)
 }
 
 func (k Keeper) DeleteParams(ctx sdk.Context) error {
-	store := ctx.KVStore(k.storeKey)
-	store.Delete(types.KeyParams)
-	return nil
+	return k.Params.Remove(ctx)
 }
 
 func (k Keeper) AddLaneConfig(ctx sdk.Context, laneConfig types.LaneParams) error {
@@ -88,6 +85,10 @@ func (k Keeper) AddLaneConfig(ctx sdk.Context, laneConfig types.LaneParams) erro
 	}
 
 	params.Lanes = append(params.Lanes, laneConfig)
+
+	if err := params.ValidatePartialParams(); err != nil {
+		return err
+	}
 
 	return k.SetParams(ctx, params)
 }

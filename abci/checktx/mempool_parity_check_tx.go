@@ -12,6 +12,7 @@ import (
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 
 	"github.com/skip-mev/block-sdk/v2/block"
+	lanetypes "github.com/skip-mev/block-sdk/v2/x/lane/types"
 )
 
 // MempoolParityCheckTx is a CheckTx function that evicts txs that are not in the app-side mempool
@@ -131,6 +132,14 @@ func (m MempoolParityCheckTx) CheckTx() CheckTx {
 		if err != nil {
 			return sdkerrors.ResponseCheckTxWithEvents(
 				err,
+				0,
+				0,
+				nil,
+				false,
+			), nil
+		} else if ratio.IsNegative() {
+			return sdkerrors.ResponseCheckTxWithEvents(
+				lanetypes.ErrLaneNotFound,
 				0,
 				0,
 				nil,

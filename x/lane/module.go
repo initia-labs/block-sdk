@@ -23,6 +23,8 @@ import (
 	"github.com/skip-mev/block-sdk/v2/x/lane/client/cli"
 	"github.com/skip-mev/block-sdk/v2/x/lane/keeper"
 	"github.com/skip-mev/block-sdk/v2/x/lane/types"
+
+	sdkruntime "github.com/cosmos/cosmos-sdk/runtime"
 )
 
 var (
@@ -168,9 +170,10 @@ func ProvideModule(in Inputs) Outputs {
 		authority = authtypes.NewModuleAddressOrBech32Address(in.Config.Authority)
 	}
 
+	storeService := sdkruntime.NewKVStoreService(in.Key)
 	lanekeeper := keeper.NewKeeper(
 		in.Cdc,
-		in.Key,
+		storeService,
 		authority.String(),
 	)
 
