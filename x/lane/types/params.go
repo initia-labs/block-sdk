@@ -38,65 +38,47 @@ func DefaultParams() Params {
 	}
 }
 
-// Validate performs basic validation on the parameters.
-func (p Params) Validate() error {
-	seenZeroMaxBlockSpace := false
-	sumRatio := math.LegacyZeroDec()
+// validateCommon performs validation common to both full and partial params.
+func (p Params) validateCommon() (seenZeroMaxBlockSpace bool, sumRatio math.LegacyDec, err error) {
+	sumRatio = math.LegacyZeroDec()
 	laneNames := make(map[string]struct{})
 	for _, lane := range p.Lanes {
 		if _, ok := laneNames[lane.Name]; ok {
-			return fmt.Errorf("lane name %s is already defined", lane.Name)
+			return false, sumRatio, fmt.Errorf("lane name %s is already defined", lane.Name)
 		}
 		laneNames[lane.Name] = struct{}{}
 		if lane.Name == "" {
-			return errors.New("lane name cannot be empty")
+			return false, sumRatio, errors.New("lane name cannot be empty")
 		}
 		if lane.Ratio.IsNegative() || lane.Ratio.GT(math.LegacyOneDec()) {
-			return fmt.Errorf("lane ratio cannot be negative or greater than 1; %s", lane.Ratio)
+			return false, sumRatio, fmt.Errorf("lane ratio cannot be negative or greater than 1; %s", lane.Ratio)
 		}
 		sumRatio = sumRatio.Add(lane.Ratio)
 		if lane.Ratio.IsZero() {
 			if seenZeroMaxBlockSpace {
-				return fmt.Errorf("multiple lanes with zero max block space")
+				return false, sumRatio, fmt.Errorf("multiple lanes with zero max block space")
 			}
 			seenZeroMaxBlockSpace = true
 		}
 	}
-
 	if sumRatio.GT(math.LegacyOneDec()) {
-		return fmt.Errorf("sum of lane ratios cannot be greater than 1; %s", sumRatio)
-	} else if !seenZeroMaxBlockSpace && sumRatio.LT(math.LegacyOneDec()) {
+		return seenZeroMaxBlockSpace, sumRatio, fmt.Errorf("sum of lane ratios cannot be greater than 1; %s", sumRatio)
+	}
+	return seenZeroMaxBlockSpace, sumRatio, nil
+}
+
+func (p Params) Validate() error {
+	seenZeroMaxBlockSpace, sumRatio, err := p.validateCommon()
+	if err != nil {
+		return err
+	}
+	if !seenZeroMaxBlockSpace && sumRatio.LT(math.LegacyOneDec()) {
 		return fmt.Errorf("sum of lane ratios cannot be less than 1; %s", sumRatio)
 	}
 	return nil
 }
 
 func (p Params) ValidatePartialParams() error {
-	seenZeroMaxBlockSpace := false
-	sumRatio := math.LegacyZeroDec()
-	laneNames := make(map[string]struct{})
-	for _, lane := range p.Lanes {
-		if _, ok := laneNames[lane.Name]; ok {
-			return fmt.Errorf("lane name %s is already defined", lane.Name)
-		}
-		laneNames[lane.Name] = struct{}{}
-		if lane.Name == "" {
-			return errors.New("lane name cannot be empty")
-		}
-		if lane.Ratio.IsNegative() || lane.Ratio.GT(math.LegacyOneDec()) {
-			return fmt.Errorf("lane ratio cannot be negative or greater than 1; %s", lane.Ratio)
-		}
-		sumRatio = sumRatio.Add(lane.Ratio)
-		if lane.Ratio.IsZero() {
-			if seenZeroMaxBlockSpace {
-				return fmt.Errorf("multiple lanes with zero max block space")
-			}
-			seenZeroMaxBlockSpace = true
-		}
-	}
-
-	if sumRatio.GT(math.LegacyOneDec()) {
-		return fmt.Errorf("sum of lane ratios cannot be greater than 1; %s", sumRatio)
-	}
-	return nil
+	_, _, err := p.validateCommon()
+	return err
 }
