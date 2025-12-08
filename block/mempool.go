@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"cosmossdk.io/log"
-	"cosmossdk.io/math"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkmempool "github.com/cosmos/cosmos-sdk/types/mempool"
 )
@@ -161,8 +160,6 @@ func (m *LanedMempool) ValidateBasic() error {
 		return fmt.Errorf("registry cannot be nil; must configure at least one lane")
 	}
 
-	sum := math.LegacyZeroDec()
-	seenZeroMaxBlockSpace := false
 	seenLanes := make(map[string]struct{})
 
 	for _, lane := range m.registry {
@@ -171,25 +168,7 @@ func (m *LanedMempool) ValidateBasic() error {
 			return fmt.Errorf("duplicate lane name %s", name)
 		}
 
-		maxBlockSpace := lane.GetMaxBlockSpace()
-		if seenZeroMaxBlockSpace && maxBlockSpace.IsZero() {
-			return fmt.Errorf("only one lane can have unlimited max block space")
-		} else if maxBlockSpace.IsZero() {
-			seenZeroMaxBlockSpace = true
-		}
-
-		sum = sum.Add(lane.GetMaxBlockSpace())
 		seenLanes[name] = struct{}{}
-	}
-
-	switch {
-	// Ensure that the sum of the lane max block space percentages is less than
-	// or equal to 1.
-	case sum.GT(math.LegacyOneDec()):
-		return fmt.Errorf("sum of lane max block space percentages must be less than or equal to 1, got %s", sum)
-	// Ensure that there is no unused block space.
-	case sum.LT(math.LegacyOneDec()) && !seenZeroMaxBlockSpace:
-		return fmt.Errorf("sum of total block space percentages will be less than 1")
 	}
 
 	return nil

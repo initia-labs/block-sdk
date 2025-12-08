@@ -5,6 +5,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/x/staking/types"
 
 	"github.com/skip-mev/block-sdk/v2/block/base"
+	blocktypes "github.com/skip-mev/block-sdk/v2/block/types"
 )
 
 const (
@@ -17,15 +18,17 @@ func NewFreeLane[C comparable](
 	cfg base.LaneConfig,
 	txPriority base.TxPriority[C],
 	matchFn base.MatchHandler,
+	laneKeeper blocktypes.LaneKeeper,
 ) *base.BaseLane {
 	options := []base.LaneOption{
 		base.WithMatchHandler(matchFn),
-		base.WithMempoolConfigs[C](cfg, txPriority),
+		base.WithMempoolConfigs(LaneName, cfg, txPriority),
 	}
 
 	lane, err := base.NewBaseLane(
 		cfg,
 		LaneName,
+		laneKeeper,
 		options...,
 	)
 	if err != nil {

@@ -1,0 +1,183 @@
+package lane
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+
+	"cosmossdk.io/core/appmodule"
+	"cosmossdk.io/depinject"
+	storetypes "cosmossdk.io/store/types"
+	"github.com/cosmos/cosmos-sdk/client"
+	"github.com/cosmos/cosmos-sdk/codec"
+	cdctypes "github.com/cosmos/cosmos-sdk/codec/types"
+	sdk "github.com/cosmos/cosmos-sdk/types"
+	"github.com/cosmos/cosmos-sdk/types/module"
+	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
+	govtypes "github.com/cosmos/cosmos-sdk/x/gov/types"
+	"github.com/gorilla/mux"
+	"github.com/grpc-ecosystem/grpc-gateway/runtime"
+	"github.com/spf13/cobra"
+
+	modulev1 "github.com/skip-mev/block-sdk/v2/api/sdk/lane/module/v1"
+	"github.com/skip-mev/block-sdk/v2/x/lane/client/cli"
+	"github.com/skip-mev/block-sdk/v2/x/lane/keeper"
+	"github.com/skip-mev/block-sdk/v2/x/lane/types"
+
+	sdkruntime "github.com/cosmos/cosmos-sdk/runtime"
+)
+
+var (
+	_ module.AppModuleBasic = AppModule{}
+	_ module.HasGenesis     = AppModule{}
+	_ module.HasServices    = AppModule{}
+	_ module.HasInvariants  = AppModule{}
+
+	_ appmodule.AppModule = AppModule{}
+)
+
+// ConsensusVersion defines the current x/lane module consensus version.
+const ConsensusVersion = 1
+
+// AppModuleBasic defines the basic application module used by the lane module.
+type AppModuleBasic struct {
+	cdc codec.Codec
+}
+
+// Name returns the lane module's name.
+func (AppModuleBasic) Name() string {
+	return types.ModuleName
+}
+
+// RegisterLegacyAminoCodec registers the lane module's types on the given LegacyAmino codec.
+func (AppModuleBasic) RegisterLegacyAminoCodec(cdc *codec.LegacyAmino) {
+	types.RegisterLegacyAminoCodec(cdc)
+}
+
+// RegisterInterfaces registers the lane module's interface types.
+func (AppModuleBasic) RegisterInterfaces(registry cdctypes.InterfaceRegistry) {
+	types.RegisterInterfaces(registry)
+}
+
+// DefaultGenesis returns default genesis state as raw bytes for the lane module.
+func (AppModuleBasic) DefaultGenesis(cdc codec.JSONCodec) json.RawMessage {
+	return cdc.MustMarshalJSON(types.DefaultGenesisState())
+}
+
+// ValidateGenesis performs genesis state validation for the lane module.
+func (AppModuleBasic) ValidateGenesis(cdc codec.JSONCodec, _ client.TxEncodingConfig, bz json.RawMessage) error {
+	var genState types.GenesisState
+	if err := cdc.UnmarshalJSON(bz, &genState); err != nil {
+		return fmt.Errorf("failed to unmarshal %s genesis state: %w", types.ModuleName, err)
+	}
+
+	return genState.Validate()
+}
+
+// RegisterGRPCGatewayRoutes registers the gRPC Gateway routes for the lane module.
+func (AppModuleBasic) RegisterGRPCGatewayRoutes(clientCtx client.Context, mux *runtime.ServeMux) {
+	if err := types.RegisterQueryHandlerClient(context.Background(), mux, types.NewQueryClient(clientCtx)); err != nil {
+		panic(err)
+	}
+}
+
+// GetQueryCmd returns the root query command for the lane module.
+func (AppModuleBasic) GetQueryCmd() *cobra.Command {
+	return cli.GetQueryCmd()
+}
+
+type AppModule struct {
+	AppModuleBasic
+
+	keeper keeper.Keeper
+}
+
+var _ appmodule.AppModule = AppModule{}
+
+// NewAppModule creates a new AppModule object.
+func NewAppModule(cdc codec.Codec, keeper keeper.Keeper) AppModule {
+	return AppModule{
+		AppModuleBasic: AppModuleBasic{cdc: cdc},
+		keeper:         keeper,
+	}
+}
+
+// IsAppModule implements the appmodule.AppModule interface.
+func (am AppModule) IsAppModule() {}
+
+// IsOnePerModuleType implements the depinject.OnePerModuleType interface.
+func (am AppModule) IsOnePerModuleType() {}
+
+// ConsensusVersion implements AppModule/ConsensusVersion.
+func (AppModule) ConsensusVersion() uint64 { return ConsensusVersion }
+
+// RegisterServices registers a the gRPC Query and Msg services for the x/lane
+// module.
+func (am AppModule) RegisterServices(cfc module.Configurator) {
+	types.RegisterMsgServer(cfc.MsgServer(), keeper.NewMsgServerImpl(am.keeper))
+	types.RegisterQueryServer(cfc.QueryServer(), keeper.NewQueryServer(am.keeper))
+}
+
+func (a AppModuleBasic) RegisterRESTRoutes(_ client.Context, _ *mux.Router) {}
+
+// RegisterInvariants registers the invariants of the module. If an invariant
+// deviates from its predicted value, the InvariantRegistry triggers appropriate
+// logic (most often the chain will be halted).
+func (am AppModule) RegisterInvariants(_ sdk.InvariantRegistry) {}
+
+// InitGenesis performs the module's genesis initialization for the lane
+// module. It returns no validator updates.
+func (am AppModule) InitGenesis(ctx sdk.Context, cdc codec.JSONCodec, gs json.RawMessage) {
+	var genState types.GenesisState
+	cdc.MustUnmarshalJSON(gs, &genState)
+
+	am.keeper.InitGenesis(ctx, genState)
+}
+
+// ExportGenesis returns the lane module's exported genesis state as raw
+// JSON bytes.
+func (am AppModule) ExportGenesis(ctx sdk.Context, cdc codec.JSONCodec) json.RawMessage {
+	genState := am.keeper.ExportGenesis(ctx)
+	return cdc.MustMarshalJSON(genState)
+}
+
+func init() {
+	appmodule.Register(
+		&modulev1.Module{},
+		appmodule.Provide(ProvideModule),
+	)
+}
+
+type Inputs struct {
+	depinject.In
+
+	Config *modulev1.Module
+	Cdc    codec.Codec
+	Key    *storetypes.KVStoreKey
+}
+
+type Outputs struct {
+	depinject.Out
+
+	Lanekeeper keeper.Keeper
+	Module     appmodule.AppModule
+}
+
+func ProvideModule(in Inputs) Outputs {
+	// default to governance authority if not provided
+	authority := authtypes.NewModuleAddress(govtypes.ModuleName)
+	if in.Config.Authority != "" {
+		authority = authtypes.NewModuleAddressOrBech32Address(in.Config.Authority)
+	}
+
+	storeService := sdkruntime.NewKVStoreService(in.Key)
+	lanekeeper := keeper.NewKeeper(
+		in.Cdc,
+		storeService,
+		authority.String(),
+	)
+
+	m := NewAppModule(in.Cdc, lanekeeper)
+
+	return Outputs{Lanekeeper: lanekeeper, Module: m}
+}

@@ -6,12 +6,10 @@ import (
 
 	"cosmossdk.io/log"
 	"cosmossdk.io/math"
-	"cosmossdk.io/store"
 	storetypes "cosmossdk.io/store/types"
 
 	cometabci "github.com/cometbft/cometbft/abci/types"
 	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
-	db "github.com/cosmos/cosmos-db"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/stretchr/testify/suite"
 
@@ -397,8 +395,7 @@ type baseApp struct {
 
 // CommitMultiStore is utilized to retrieve the latest committed state.
 func (ba *baseApp) CommitMultiStore() storetypes.CommitMultiStore {
-	db := db.NewMemDB()
-	return store.NewCommitMultiStore(db, ba.ctx.Logger(), nil)
+	return ba.ctx.MultiStore().(storetypes.CommitMultiStore)
 }
 
 // CheckTx is baseapp's CheckTx method that checks the validity of a

@@ -5,13 +5,14 @@ import (
 
 	"cosmossdk.io/math"
 
+	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/skip-mev/block-sdk/v2/block/utils"
 )
 
 // Lane defines the contract interface for a lane.
 type Lane interface {
 	Name() string
-	GetMaxBlockSpace() math.LegacyDec
+	GetRatio(ctx sdk.Context) (math.LegacyDec, error)
 }
 
 // UpdateProposal updates the proposal with the given transactions and lane limits. There are a
@@ -24,7 +25,7 @@ type Lane interface {
 //     the lane.
 //  5. The lane must not have already prepared a partial proposal.
 //  6. The transaction must not already be in the proposal.
-func (p *Proposal) UpdateProposal(lane Lane, partialProposal []utils.TxWithInfo) error {
+func (p *Proposal) UpdateProposal(ctx sdk.Context, lane Lane, partialProposal []utils.TxWithInfo) error {
 	if len(partialProposal) == 0 {
 		return nil
 	}
@@ -64,7 +65,11 @@ func (p *Proposal) UpdateProposal(lane Lane, partialProposal []utils.TxWithInfo)
 	}
 
 	// invariant check: Ensure that the partial proposal is not too large.
-	limit := p.GetLaneLimits(lane.GetMaxBlockSpace())
+	ratio, err := lane.GetRatio(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get ratio: %w", err)
+	}
+	limit := p.GetLaneLimits(ratio)
 	if partialProposalSize > limit.MaxTxBytes {
 		return fmt.Errorf(
 			"partial proposal is too large: %d > %d",

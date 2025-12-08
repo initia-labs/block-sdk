@@ -25,29 +25,27 @@ import (
 	"github.com/cosmos/gogoproto/proto"
 
 	auctiontypes "github.com/skip-mev/block-sdk/v2/x/auction/types"
-)
+	lanetypes "github.com/skip-mev/block-sdk/v2/x/lane/types"
 
-type EncodingConfig struct {
-	InterfaceRegistry types.InterfaceRegistry
-	Codec             codec.Codec
-	TxConfig          client.TxConfig
-	Amino             *codec.LegacyAmino
-}
+	testtypes "github.com/skip-mev/block-sdk/v2/testutils/types"
+)
 
 // CreateBaseSDKContext creates a base sdk context with the default store key and transient key.
 func CreateBaseSDKContext(t *testing.T) sdk.Context {
-	key := storetypes.NewKVStoreKey(auctiontypes.StoreKey)
-
-	testCtx := testutil.DefaultContextWithDB(
-		t,
-		key,
-		storetypes.NewTransientStoreKey("transient_test"),
+	testCtx := testutil.DefaultContextWithKeys(
+		map[string]*storetypes.KVStoreKey{
+			auctiontypes.StoreKey: storetypes.NewKVStoreKey(auctiontypes.StoreKey),
+			lanetypes.StoreKey:    storetypes.NewKVStoreKey(lanetypes.StoreKey),
+		},
+		map[string]*storetypes.TransientStoreKey{
+			"transient_test": storetypes.NewTransientStoreKey("transient_test"),
+		},
+		map[string]*storetypes.MemoryStoreKey{},
 	)
-
-	return testCtx.Ctx
+	return testCtx
 }
 
-func CreateTestEncodingConfig() EncodingConfig {
+func CreateTestEncodingConfig() testtypes.EncodingConfig {
 	interfaceRegistry, err := types.NewInterfaceRegistryWithOptions(types.InterfaceRegistryOptions{
 		ProtoFiles: proto.HybridResolver,
 		SigningOptions: txsigning.Options{
@@ -62,11 +60,12 @@ func CreateTestEncodingConfig() EncodingConfig {
 	banktypes.RegisterInterfaces(interfaceRegistry)
 	cryptocodec.RegisterInterfaces(interfaceRegistry)
 	auctiontypes.RegisterInterfaces(interfaceRegistry)
+	lanetypes.RegisterInterfaces(interfaceRegistry)
 	stakingtypes.RegisterInterfaces(interfaceRegistry)
 
 	protoCodec := codec.NewProtoCodec(interfaceRegistry)
 
-	return EncodingConfig{
+	return testtypes.EncodingConfig{
 		InterfaceRegistry: interfaceRegistry,
 		Codec:             protoCodec,
 		TxConfig:          tx.NewTxConfig(protoCodec, tx.DefaultSignModes),

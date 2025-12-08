@@ -12,6 +12,7 @@ import (
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 
 	"github.com/skip-mev/block-sdk/v2/block"
+	lanetypes "github.com/skip-mev/block-sdk/v2/x/lane/types"
 )
 
 // MempoolParityCheckTx is a CheckTx function that evicts txs that are not in the app-side mempool
@@ -127,30 +128,48 @@ func (m MempoolParityCheckTx) CheckTx() CheckTx {
 		}
 
 		consensusParams := sdkCtx.ConsensusParams()
-		laneSize := lane.GetMaxBlockSpace().MulInt64(consensusParams.GetBlock().GetMaxBytes()).TruncateInt64()
-
-		txSize := int64(len(req.Tx))
-		if txSize > laneSize {
-			if isReCheck && txInMempool {
-				removeTx = true
-			}
-
-			m.logger.Debug(
-				"tx size exceeds max block bytes",
-				"tx", tx,
-				"tx size", txSize,
-				"max bytes", laneSize,
-			)
-
+		ratio, err := lane.GetRatio(sdkCtx)
+		if err != nil {
 			return sdkerrors.ResponseCheckTxWithEvents(
-				fmt.Errorf("tx size exceeds max bytes for lane %s", lane.Name()),
+				err,
 				0,
 				0,
 				nil,
 				false,
 			), nil
-		}
+		} else if ratio.IsNegative() {
+			return sdkerrors.ResponseCheckTxWithEvents(
+				lanetypes.ErrLaneNotFound,
+				0,
+				0,
+				nil,
+				false,
+			), nil
+		} else if ratio.IsPositive() {
+			laneSize := ratio.MulInt64(consensusParams.GetBlock().GetMaxBytes()).TruncateInt64()
 
+			txSize := int64(len(req.Tx))
+			if txSize > laneSize {
+				if isReCheck && txInMempool {
+					removeTx = true
+				}
+
+				m.logger.Debug(
+					"tx size exceeds max block bytes",
+					"tx", tx,
+					"tx size", txSize,
+					"max bytes", laneSize,
+				)
+
+				return sdkerrors.ResponseCheckTxWithEvents(
+					fmt.Errorf("tx size exceeds max bytes for lane %s", lane.Name()),
+					0,
+					0,
+					nil,
+					false,
+				), nil
+			}
+		}
 		return res, checkTxError
 	}
 }

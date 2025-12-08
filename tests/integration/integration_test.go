@@ -3,13 +3,12 @@ package integration_test
 import (
 	"testing"
 
-	"github.com/cosmos/cosmos-sdk/codec/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/skip-mev/chaintestutil/encoding"
 	"github.com/stretchr/testify/suite"
 
 	testkeeper "github.com/skip-mev/block-sdk/v2/testutils/keeper"
-	auctiontypes "github.com/skip-mev/block-sdk/v2/x/auction/types"
+	testtypes "github.com/skip-mev/block-sdk/v2/testutils/types"
 )
 
 type IntegrationTestSuite struct {
@@ -26,9 +25,17 @@ func TestIntegrationTestSuite(t *testing.T) {
 }
 
 func (s *IntegrationTestSuite) SetupTest() {
-	s.encCfg = encoding.MakeTestEncodingConfig(func(registry types.InterfaceRegistry) {
-		auctiontypes.RegisterInterfaces(registry)
-	})
+	// s.encCfg = encoding.MakeTestEncodingConfig(func(registry types.InterfaceRegistry) {
+	// 	auctiontypes.RegisterInterfaces(registry)
+	// })
 
-	s.ctx, s.TestKeepers, s.TestMsgServers = testkeeper.NewTestSetup(s.T())
+	var encodingConfig testtypes.EncodingConfig
+	s.ctx, encodingConfig, s.TestKeepers, s.TestMsgServers = testkeeper.NewTestSetup(s.T())
+
+	s.encCfg = encoding.TestEncodingConfig{
+		InterfaceRegistry: encodingConfig.InterfaceRegistry,
+		Codec:             encodingConfig.Codec,
+		TxConfig:          encodingConfig.TxConfig,
+		Amino:             encodingConfig.Amino,
+	}
 }

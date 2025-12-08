@@ -1,0 +1,38 @@
+syntax = "proto3";
+package sdk.lane.v1;
+
+import "amino/amino.proto";
+import "cosmos/msg/v1/msg.proto";
+import "cosmos_proto/cosmos.proto";
+import "gogoproto/gogo.proto";
+
+option go_package = "github.com/skip-mev/block-sdk/x/lane/types";
+option (gogoproto.equal_all) = false;
+
+// Params defines the parameters for the lane module.
+message Params {
+	option (amino.name) = "block-sdk/x/lane/Params";
+
+	repeated LaneParams lanes = 1 [ (gogoproto.nullable) = false, (amino.dont_omitempty) = true ];
+}
+
+message LaneParams {
+	string name = 1;
+
+	string ratio = 2 [
+		(gogoproto.moretags) = "yaml:\"ratio\"",
+		(gogoproto.customtype) = "cosmossdk.io/math.LegacyDec",
+		(gogoproto.nullable) = false,
+		(cosmos_proto.scalar) = "cosmos.Dec",
+		(amino.dont_omitempty) = true
+	];
+
+	// MaxTxs sets the maximum number of transactions allowed in the mempool with
+	// the semantics:
+	// - if MaxTx == 0, there is no cap on the number of transactions in the mempool
+	// - if MaxTx > 0, the mempool will cap the number of transactions it stores,
+	//   and will prioritize transactions by their priority and sender-nonce
+	//   (sequence number) when evicting transactions.
+	// - if MaxTx < 0, `Insert` is a no-op.
+	int64 max_txs = 3;
+}

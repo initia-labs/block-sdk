@@ -8,6 +8,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	testutils "github.com/skip-mev/block-sdk/v2/testutils"
+	testtypes "github.com/skip-mev/block-sdk/v2/testutils/types"
 	"github.com/skip-mev/block-sdk/v2/x/auction/keeper"
 	"github.com/skip-mev/block-sdk/v2/x/auction/types"
 	"github.com/skip-mev/block-sdk/v2/x/auction/types/mocks"
@@ -23,7 +24,7 @@ type KeeperTestSuite struct {
 	accountKeeper    *mocks.AccountKeeper
 	distrKeeper      *mocks.DistributionKeeper
 	stakingKeeper    *mocks.StakingKeeper
-	encCfg           testutils.EncodingConfig
+	encCfg           testtypes.EncodingConfig
 	ctx              sdk.Context
 	key              *storetypes.KVStoreKey
 	authorityAccount sdk.AccAddress

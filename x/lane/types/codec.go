@@ -1,0 +1,40 @@
+package types
+
+import (
+	"github.com/cosmos/cosmos-sdk/codec"
+	"github.com/cosmos/cosmos-sdk/codec/legacy"
+	"github.com/cosmos/cosmos-sdk/codec/types"
+	cryptocodec "github.com/cosmos/cosmos-sdk/crypto/codec"
+	sdk "github.com/cosmos/cosmos-sdk/types"
+	"github.com/cosmos/cosmos-sdk/types/msgservice"
+)
+
+var (
+	ModuleCdc = codec.NewLegacyAmino()
+)
+
+func init() {
+	RegisterLegacyAminoCodec(ModuleCdc)
+	cryptocodec.RegisterCrypto(ModuleCdc)
+	sdk.RegisterLegacyAminoCodec(ModuleCdc)
+}
+
+// RegisterLegacyAminoCodec registers the necessary x/lane interfaces and
+// concrete types on the provided LegacyAmino codec. These types are used for
+// Amino JSON serialization.
+func RegisterLegacyAminoCodec(cdc *codec.LegacyAmino) {
+	legacy.RegisterAminoMsg(cdc, &MsgUpdateParams{}, "block-sdk/x/lane/MsgUpdateParams")
+
+	cdc.RegisterConcrete(Params{}, "block-sdk/x/lane/Params", nil)
+}
+
+// RegisterInterfaces registers the x/lane interfaces types with the
+// interface registry.
+func RegisterInterfaces(registry types.InterfaceRegistry) {
+	registry.RegisterImplementations(
+		(*sdk.Msg)(nil),
+		&MsgUpdateParams{},
+	)
+
+	msgservice.RegisterMsgServiceDesc(registry, &_Msg_serviceDesc)
+}

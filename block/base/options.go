@@ -69,12 +69,19 @@ func WithMempool(mempool block.LaneMempool) LaneOption {
 // WithMempoolConfigs sets the mempool for the lane with the given lane config
 // and TxPriority struct. This mempool is used to store transactions that are waiting
 // to be processed.
-func WithMempoolConfigs[C comparable](cfg LaneConfig, txPriority TxPriority[C]) LaneOption {
+func WithMempoolConfigs[C comparable](laneName string, cfg LaneConfig, txPriority TxPriority[C]) LaneOption {
 	return func(l *BaseLane) {
-		l.LaneMempool = NewMempool(
+		mempool, err := NewMempool(
+			laneName,
 			txPriority,
 			cfg.SignerExtractor,
-			cfg.MaxTxs,
+			cfg.TxEncoder,
+			l.laneKeeper,
 		)
+		if err != nil {
+			panic(err)
+		}
+
+		l.LaneMempool = mempool
 	}
 }

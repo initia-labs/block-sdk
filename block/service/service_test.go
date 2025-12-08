@@ -18,16 +18,30 @@ import (
 	"github.com/skip-mev/block-sdk/v2/lanes/mev"
 	"github.com/skip-mev/block-sdk/v2/testutils"
 	"github.com/skip-mev/block-sdk/v2/testutils/mempool"
+
+	testkeeper "github.com/skip-mev/block-sdk/v2/testutils/keeper"
+	lanekeeper "github.com/skip-mev/block-sdk/v2/x/lane/keeper"
+
+	tmprototypes "github.com/cometbft/cometbft/proto/tendermint/types"
 )
 
 func TestGetTxDistribution(t *testing.T) {
-	config := testutils.CreateTestEncodingConfig()
+	ctx, encodingConfig, testKeepers, _ := testkeeper.NewTestSetup(t)
+	ctx = ctx.WithConsensusParams(tmprototypes.ConsensusParams{
+		Block: &tmprototypes.BlockParams{
+			MaxBytes: 10000,
+			MaxGas:   10000,
+		},
+	})
+
+	config := encodingConfig
+	laneKeeper := testKeepers.LaneKeeper
 	accounts := testutils.RandomAccounts(rand.New(rand.NewSource(1)), 3)
-	ctx := testutils.CreateBaseSDKContext(t)
+	// ctx := testutils.CreateBaseSDKContext(t)
 
 	testCases := []struct {
 		name                 string
-		mempool              func() *block.LanedMempool
+		mempool              func(ctx sdk.Context, laneKeeper *lanekeeper.Keeper) *block.LanedMempool
 		expectedDistribution map[string]uint64
 	}{
 		{
@@ -41,7 +55,7 @@ func TestGetTxDistribution(t *testing.T) {
 		},
 		{
 			name: "only default lane has transactions",
-			mempool: func() *block.LanedMempool {
+			mempool: func(ctx sdk.Context, laneKeeper *lanekeeper.Keeper) *block.LanedMempool {
 				tx1, err := testutils.CreateRandomTx(
 					config.TxConfig,
 					accounts[0],
@@ -64,7 +78,7 @@ func TestGetTxDistribution(t *testing.T) {
 				)
 				require.NoError(t, err)
 
-				mempool := mempool.CreateMempool()
+				mempool := mempool.CreateMempool(ctx, laneKeeper)
 				err = mempool.Insert(ctx, tx1)
 				require.NoError(t, err)
 				err = mempool.Insert(ctx, tx2)
@@ -80,7 +94,7 @@ func TestGetTxDistribution(t *testing.T) {
 		},
 		{
 			name: "only free lane has transactions",
-			mempool: func() *block.LanedMempool {
+			mempool: func(ctx sdk.Context, laneKeeper *lanekeeper.Keeper) *block.LanedMempool {
 				tx1, err := testutils.CreateFreeTx(
 					config.TxConfig,
 					accounts[0],
@@ -91,7 +105,7 @@ func TestGetTxDistribution(t *testing.T) {
 				)
 				require.NoError(t, err)
 
-				mempool := mempool.CreateMempool()
+				mempool := mempool.CreateMempool(ctx, laneKeeper)
 				err = mempool.Insert(ctx, tx1)
 				require.NoError(t, err)
 
@@ -105,7 +119,7 @@ func TestGetTxDistribution(t *testing.T) {
 		},
 		{
 			name: "only mev lane has transactions",
-			mempool: func() *block.LanedMempool {
+			mempool: func(ctx sdk.Context, laneKeeper *lanekeeper.Keeper) *block.LanedMempool {
 				tx1, err := testutils.CreateAuctionTxWithSigners(
 					config.TxConfig,
 					accounts[0],
@@ -116,7 +130,7 @@ func TestGetTxDistribution(t *testing.T) {
 				)
 				require.NoError(t, err)
 
-				mempool := mempool.CreateMempool()
+				mempool := mempool.CreateMempool(ctx, laneKeeper)
 				err = mempool.Insert(ctx, tx1)
 				require.NoError(t, err)
 
@@ -130,7 +144,7 @@ func TestGetTxDistribution(t *testing.T) {
 		},
 		{
 			name: "all lanes have transactions",
-			mempool: func() *block.LanedMempool {
+			mempool: func(ctx sdk.Context, laneKeeper *lanekeeper.Keeper) *block.LanedMempool {
 				mevTx, err := testutils.CreateAuctionTxWithSigners(
 					config.TxConfig,
 					accounts[0],
@@ -162,7 +176,7 @@ func TestGetTxDistribution(t *testing.T) {
 				)
 				require.NoError(t, err)
 
-				mempool := mempool.CreateMempool()
+				mempool := mempool.CreateMempool(ctx, laneKeeper)
 				err = mempool.Insert(ctx, mevTx)
 				require.NoError(t, err)
 				err = mempool.Insert(ctx, freeTx)
@@ -182,7 +196,7 @@ func TestGetTxDistribution(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			mempool := tc.mempool()
+			mempool := tc.mempool(ctx, &laneKeeper)
 			queryService := service.NewQueryService(mempool)
 			ctx := context.Background()
 

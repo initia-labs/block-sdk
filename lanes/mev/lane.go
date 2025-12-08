@@ -2,6 +2,7 @@ package mev
 
 import (
 	"github.com/skip-mev/block-sdk/v2/block/base"
+	blocktypes "github.com/skip-mev/block-sdk/v2/block/types"
 )
 
 const (
@@ -31,15 +32,17 @@ func NewMEVLane(
 	cfg base.LaneConfig,
 	factory Factory,
 	matchHandler base.MatchHandler,
+	laneKeeper blocktypes.LaneKeeper,
 ) *MEVLane {
 	options := []base.LaneOption{
 		base.WithMatchHandler(matchHandler),
-		base.WithMempoolConfigs[string](cfg, TxPriority(factory)),
+		base.WithMempoolConfigs(LaneName, cfg, TxPriority(factory)),
 	}
 
 	baseLane, err := base.NewBaseLane(
 		cfg,
 		LaneName,
+		laneKeeper,
 		options...,
 	)
 	if err != nil {

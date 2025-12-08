@@ -86,6 +86,9 @@ func (p *Proposal) GetLaneLimits(ratio math.LegacyDec) LaneLimits {
 		} else {
 			gasLimit = p.Info.MaxGasLimit - p.Info.GasLimit
 		}
+	} else if ratio.IsNegative() {
+		txBytes = 0
+		gasLimit = 0
 	} else {
 		// Otherwise, we calculate the max tx bytes / gas limit for the lane based on the ratio.
 		txBytes = ratio.MulInt64(p.Info.MaxBlockSize).TruncateInt().Int64()

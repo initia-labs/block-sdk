@@ -19,6 +19,8 @@ import (
 	"github.com/skip-mev/block-sdk/v2/block/utils"
 	defaultlane "github.com/skip-mev/block-sdk/v2/lanes/base"
 	testutils "github.com/skip-mev/block-sdk/v2/testutils"
+
+	lanetypes "github.com/skip-mev/block-sdk/v2/x/lane/types"
 )
 
 func (s *BaseTestSuite) TestPrepareLane() {
@@ -504,12 +506,12 @@ func (s *BaseTestSuite) TestPrepareLane() {
 		mockLane := mocks.NewLane(s.T())
 
 		mockLane.On("Name").Return("test")
-		mockLane.On("GetMaxBlockSpace").Return(math.LegacyOneDec())
+		mockLane.On("GetRatio", s.ctx).Return(math.LegacyOneDec(), nil)
 
 		txWithInfo, err := lane.GetTxInfo(s.ctx, tx)
 		s.Require().NoError(err)
 
-		err = emptyProposal.UpdateProposal(mockLane, []utils.TxWithInfo{txWithInfo})
+		err = emptyProposal.UpdateProposal(s.ctx, mockLane, []utils.TxWithInfo{txWithInfo})
 		s.Require().NoError(err)
 
 		finalProposal, err := lane.PrepareLane(s.ctx, emptyProposal, block.NoOpPrepareLanesHandler())
@@ -1644,10 +1646,26 @@ func (s *BaseTestSuite) initLane(
 		s.encodingConfig.TxConfig.TxDecoder(),
 		s.setUpAnteHandler(expectedExecution),
 		signer_extraction.NewDefaultAdapter(),
-		maxBlockSpace,
 	)
 
-	return defaultlane.NewDefaultLane(config, base.DefaultMatchHandler())
+	err := s.laneKeeper.SetParams(s.ctx, lanetypes.Params{
+		Lanes: []lanetypes.LaneParams{
+			{
+				Name:   "default",
+				Ratio:  maxBlockSpace,
+				MaxTxs: 0, // unlimited
+			},
+
+			{ // to ensure the sum of the ratios is 1
+				Name:   "test",
+				Ratio:  math.LegacyZeroDec(),
+				MaxTxs: 0, // unlimited
+			},
+		},
+	})
+	s.Require().NoError(err)
+
+	return defaultlane.NewDefaultLane(config, base.DefaultMatchHandler(), s.laneKeeper)
 }
 
 func (s *BaseTestSuite) initLaneWithMatchHandlers(
@@ -1661,12 +1679,27 @@ func (s *BaseTestSuite) initLaneWithMatchHandlers(
 		s.encodingConfig.TxConfig.TxDecoder(),
 		s.setUpAnteHandler(expectedExecution),
 		signer_extraction.NewDefaultAdapter(),
-		maxBlockSpace,
 	)
 
 	mh := base.NewMatchHandler(base.DefaultMatchHandler(), matchHandlers...)
 
-	return defaultlane.NewDefaultLane(config, mh)
+	err := s.laneKeeper.SetParams(s.ctx, lanetypes.Params{
+		Lanes: []lanetypes.LaneParams{
+			{
+				Name:   "default",
+				Ratio:  maxBlockSpace,
+				MaxTxs: 0, // unlimited
+			},
+			{ // to ensure the sum of the ratios is 1
+				Name:   "test",
+				Ratio:  math.LegacyZeroDec(),
+				MaxTxs: 0, // unlimited
+			},
+		},
+	})
+	s.Require().NoError(err)
+
+	return defaultlane.NewDefaultLane(config, mh, s.laneKeeper)
 }
 
 func (s *BaseTestSuite) setUpAnteHandler(expectedExecution map[sdk.Tx]bool) sdk.AnteHandler {

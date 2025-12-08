@@ -17,10 +17,16 @@ import (
 	"github.com/skip-mev/block-sdk/v2/block/utils"
 	defaultlane "github.com/skip-mev/block-sdk/v2/lanes/base"
 	"github.com/skip-mev/block-sdk/v2/testutils"
+
+	testkeeper "github.com/skip-mev/block-sdk/v2/testutils/keeper"
+	lanekeeper "github.com/skip-mev/block-sdk/v2/x/lane/keeper"
+	lanetypes "github.com/skip-mev/block-sdk/v2/x/lane/types"
 )
 
 func TestUpdateProposal(t *testing.T) {
-	encodingConfig := testutils.CreateTestEncodingConfig()
+	ctx, encodingConfig, testKeepers, _ := testkeeper.NewTestSetup(t)
+	// encodingConfig := testutils.CreateTestEncodingConfig()
+	laneKeeper := testKeepers.LaneKeeper
 
 	// Create a few random accounts
 	random := rand.New(rand.NewSource(1))
@@ -29,12 +35,12 @@ func TestUpdateProposal(t *testing.T) {
 	lane := mocks.NewLane(t)
 
 	lane.On("Name").Return("test").Maybe()
-	lane.On("GetMaxBlockSpace").Return(math.LegacyNewDec(1)).Maybe()
+	lane.On("GetRatio", ctx).Return(math.LegacyNewDec(1), nil).Maybe()
 
 	t.Run("can update with no transactions", func(t *testing.T) {
 		proposal := proposals.NewProposal(log.NewNopLogger(), 100, 100)
 
-		err := proposal.UpdateProposal(lane, nil)
+		err := proposal.UpdateProposal(ctx, lane, nil)
 		require.NoError(t, err)
 
 		// Ensure that the proposal is empty.
@@ -66,10 +72,10 @@ func TestUpdateProposal(t *testing.T) {
 		gasLimit := 100
 		proposal := proposals.NewProposal(log.NewNopLogger(), int64(size), uint64(gasLimit))
 
-		txsWithInfo, err := getTxsWithInfo([]sdk.Tx{tx})
+		txsWithInfo, err := getTxsWithInfo(ctx, []sdk.Tx{tx}, &laneKeeper)
 		require.NoError(t, err)
 
-		err = proposal.UpdateProposal(lane, txsWithInfo)
+		err = proposal.UpdateProposal(ctx, lane, txsWithInfo)
 		require.NoError(t, err)
 
 		// Ensure that the proposal is not empty.
@@ -115,10 +121,10 @@ func TestUpdateProposal(t *testing.T) {
 
 		proposal := proposals.NewProposal(log.NewNopLogger(), int64(size), gasLimit)
 
-		txsWithInfo, err := getTxsWithInfo(txs)
+		txsWithInfo, err := getTxsWithInfo(ctx, txs, &laneKeeper)
 		require.NoError(t, err)
 
-		err = proposal.UpdateProposal(lane, txsWithInfo)
+		err = proposal.UpdateProposal(ctx, lane, txsWithInfo)
 		require.NoError(t, err)
 
 		// Ensure that the proposal is not empty.
@@ -155,10 +161,10 @@ func TestUpdateProposal(t *testing.T) {
 		gasLimit := uint64(100)
 		proposal := proposals.NewProposal(log.NewNopLogger(), size, gasLimit)
 
-		txsWithInfo, err := getTxsWithInfo([]sdk.Tx{tx})
+		txsWithInfo, err := getTxsWithInfo(ctx, []sdk.Tx{tx}, &laneKeeper)
 		require.NoError(t, err)
 
-		err = proposal.UpdateProposal(lane, txsWithInfo)
+		err = proposal.UpdateProposal(ctx, lane, txsWithInfo)
 		require.NoError(t, err)
 
 		// Ensure that the proposal is empty.
@@ -171,13 +177,13 @@ func TestUpdateProposal(t *testing.T) {
 		otherlane := mocks.NewLane(t)
 
 		otherlane.On("Name").Return("test").Maybe()
-		otherlane.On("GetMaxBlockSpace").Return(math.LegacyNewDec(1)).Maybe()
+		otherlane.On("GetRatio", ctx).Return(math.LegacyNewDec(1), nil).Maybe()
 
-		txsWithInfo, err = getTxsWithInfo([]sdk.Tx{tx})
+		txsWithInfo, err = getTxsWithInfo(ctx, []sdk.Tx{tx}, &laneKeeper)
 		require.NoError(t, err)
 
 		// Attempt to add the same transaction again.
-		err = proposal.UpdateProposal(otherlane, txsWithInfo)
+		err = proposal.UpdateProposal(ctx, otherlane, txsWithInfo)
 		require.Error(t, err)
 
 		require.Equal(t, 1, len(proposal.Txs))
@@ -221,16 +227,16 @@ func TestUpdateProposal(t *testing.T) {
 		gasLimit := 200
 		proposal := proposals.NewProposal(log.NewNopLogger(), int64(size), uint64(gasLimit))
 
-		txsWithInfo, err := getTxsWithInfo([]sdk.Tx{tx})
+		txsWithInfo, err := getTxsWithInfo(ctx, []sdk.Tx{tx}, &laneKeeper)
 		require.NoError(t, err)
 
-		err = proposal.UpdateProposal(lane, txsWithInfo)
+		err = proposal.UpdateProposal(ctx, lane, txsWithInfo)
 		require.NoError(t, err)
 
-		txsWithInfo, err = getTxsWithInfo([]sdk.Tx{tx2})
+		txsWithInfo, err = getTxsWithInfo(ctx, []sdk.Tx{tx2}, &laneKeeper)
 		require.NoError(t, err)
 
-		err = proposal.UpdateProposal(lane, txsWithInfo)
+		err = proposal.UpdateProposal(ctx, lane, txsWithInfo)
 		require.Error(t, err)
 
 		// Ensure that the proposal is not empty.
@@ -268,12 +274,12 @@ func TestUpdateProposal(t *testing.T) {
 		lane := mocks.NewLane(t)
 
 		lane.On("Name").Return("test").Maybe()
-		lane.On("GetMaxBlockSpace").Return(math.LegacyMustNewDecFromStr("0.5")).Maybe()
+		lane.On("GetRatio", ctx).Return(math.LegacyMustNewDecFromStr("0.5"), nil).Maybe()
 
-		txsWithInfo, err := getTxsWithInfo([]sdk.Tx{tx})
+		txsWithInfo, err := getTxsWithInfo(ctx, []sdk.Tx{tx}, &laneKeeper)
 		require.NoError(t, err)
 
-		err = proposal.UpdateProposal(lane, txsWithInfo)
+		err = proposal.UpdateProposal(ctx, lane, txsWithInfo)
 		require.Error(t, err)
 
 		// Ensure that the proposal is empty.
@@ -309,12 +315,12 @@ func TestUpdateProposal(t *testing.T) {
 		lane := mocks.NewLane(t)
 
 		lane.On("Name").Return("test").Maybe()
-		lane.On("GetMaxBlockSpace").Return(math.LegacyMustNewDecFromStr("0.5")).Maybe()
+		lane.On("GetRatio", ctx).Return(math.LegacyMustNewDecFromStr("0.5"), nil).Maybe()
 
-		txsWithInfo, err := getTxsWithInfo([]sdk.Tx{tx})
+		txsWithInfo, err := getTxsWithInfo(ctx, []sdk.Tx{tx}, &laneKeeper)
 		require.NoError(t, err)
 
-		err = proposal.UpdateProposal(lane, txsWithInfo)
+		err = proposal.UpdateProposal(ctx, lane, txsWithInfo)
 		require.Error(t, err)
 
 		// Ensure that the proposal is empty.
@@ -347,10 +353,10 @@ func TestUpdateProposal(t *testing.T) {
 		gasLimit := 100
 		proposal := proposals.NewProposal(log.NewNopLogger(), int64(size)-1, uint64(gasLimit))
 
-		txsWithInfo, err := getTxsWithInfo([]sdk.Tx{tx})
+		txsWithInfo, err := getTxsWithInfo(ctx, []sdk.Tx{tx}, &laneKeeper)
 		require.NoError(t, err)
 
-		err = proposal.UpdateProposal(lane, txsWithInfo)
+		err = proposal.UpdateProposal(ctx, lane, txsWithInfo)
 		require.Error(t, err)
 
 		// Ensure that the proposal is empty.
@@ -383,10 +389,10 @@ func TestUpdateProposal(t *testing.T) {
 		gasLimit := 100
 		proposal := proposals.NewProposal(log.NewNopLogger(), int64(size), uint64(gasLimit)-1)
 
-		txsWithInfo, err := getTxsWithInfo([]sdk.Tx{tx})
+		txsWithInfo, err := getTxsWithInfo(ctx, []sdk.Tx{tx}, &laneKeeper)
 		require.NoError(t, err)
 
-		err = proposal.UpdateProposal(lane, txsWithInfo)
+		err = proposal.UpdateProposal(ctx, lane, txsWithInfo)
 		require.Error(t, err)
 
 		// Ensure that the proposal is empty.
@@ -427,20 +433,20 @@ func TestUpdateProposal(t *testing.T) {
 
 		proposal := proposals.NewProposal(log.NewNopLogger(), 10000, 10000)
 
-		txsWithInfo, err := getTxsWithInfo([]sdk.Tx{tx})
+		txsWithInfo, err := getTxsWithInfo(ctx, []sdk.Tx{tx}, &laneKeeper)
 		require.NoError(t, err)
 
-		err = proposal.UpdateProposal(lane, txsWithInfo)
+		err = proposal.UpdateProposal(ctx, lane, txsWithInfo)
 		require.NoError(t, err)
 
 		otherlane := mocks.NewLane(t)
 		otherlane.On("Name").Return("test2")
-		otherlane.On("GetMaxBlockSpace").Return(math.LegacyMustNewDecFromStr("1.0"))
+		otherlane.On("GetRatio", ctx).Return(math.LegacyMustNewDecFromStr("1.0"), nil)
 
-		txsWithInfo, err = getTxsWithInfo([]sdk.Tx{tx2})
+		txsWithInfo, err = getTxsWithInfo(ctx, []sdk.Tx{tx2}, &laneKeeper)
 		require.NoError(t, err)
 
-		err = proposal.UpdateProposal(otherlane, txsWithInfo)
+		err = proposal.UpdateProposal(ctx, otherlane, txsWithInfo)
 		require.NoError(t, err)
 
 		size := len(txBzs[0]) + len(txBzs[1])
@@ -580,7 +586,7 @@ func TestGetLaneLimits(t *testing.T) {
 	}
 }
 
-func getTxsWithInfo(txs []sdk.Tx) ([]utils.TxWithInfo, error) {
+func getTxsWithInfo(ctx sdk.Context, txs []sdk.Tx, laneKeeper *lanekeeper.Keeper) ([]utils.TxWithInfo, error) {
 	encoding := testutils.CreateTestEncodingConfig()
 
 	cfg := base.NewLaneConfig(
@@ -589,9 +595,20 @@ func getTxsWithInfo(txs []sdk.Tx) ([]utils.TxWithInfo, error) {
 		encoding.TxConfig.TxDecoder(),
 		nil,
 		signerextraction.NewDefaultAdapter(),
-		math.LegacyNewDec(1),
 	)
-	lane := defaultlane.NewDefaultLane(cfg, base.DefaultMatchHandler())
+	lane := defaultlane.NewDefaultLane(cfg, base.DefaultMatchHandler(), laneKeeper)
+
+	err := laneKeeper.SetParams(ctx, lanetypes.Params{
+		Lanes: []lanetypes.LaneParams{
+			{
+				Name:  "test",
+				Ratio: math.LegacyNewDec(1),
+			},
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
 
 	txsWithInfo := make([]utils.TxWithInfo, len(txs))
 	for i, tx := range txs {
