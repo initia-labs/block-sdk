@@ -174,7 +174,9 @@ func (cm *Mempool[C]) AssertLaneLimits(ctx sdk.Context, tx sdk.Tx) error {
 	maxLaneTxSize := maxBlockSize
 	maxLaneGasLimit := maxGasLimit
 
-	if !ratio.IsZero() {
+	if ratio.IsNegative() {
+		return fmt.Errorf("lane %s does not exist in params", cm.laneName)
+	} else if ratio.IsPositive() {
 		maxLaneTxSize = ratio.MulInt64(maxBlockSize).TruncateInt().Int64()
 		maxLaneGasLimit = ratio.MulInt(math.NewIntFromUint64(maxGasLimit)).TruncateInt().Uint64()
 	}
