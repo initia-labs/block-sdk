@@ -1,6 +1,6 @@
+# This module represents buf.build/initia-labs/block-sdk
 version: v1
-name: buf.build/skip-mev/block-sdk
-
+name: buf.build/initia-labs/block-sdk
 deps:
   - buf.build/cosmos/cosmos-proto
   - buf.build/cosmos/cosmos-sdk:v0.47.0
@@ -11,11 +11,15 @@ breaking:
     - FILE
 lint:
   use:
-    - DEFAULT
+    - STANDARD
     - COMMENTS
+    - FILE_LOWER_SNAKE_CASE
   except:
     - SERVICE_SUFFIX
     - RPC_REQUEST_STANDARD_NAME
     - COMMENT_FIELD
     - FIELD_LOWER_SNAKE_CASE
     - PACKAGE_DIRECTORY_MATCH
+    # excluded to avoid breaking changes on existing enum values
+    - ENUM_VALUE_PREFIX
+    - ENUM_ZERO_VALUE_SUFFIX

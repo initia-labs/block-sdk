@@ -14,6 +14,7 @@ option (gogoproto.equal_all) = false;
 service Msg {
   option (cosmos.msg.v1.service) = true;
 
+  // UpdateParams defines a governance operation for updating the lane module parameters.
   rpc UpdateParams(MsgUpdateParams) returns (MsgUpdateParamsResponse);
 }
 
