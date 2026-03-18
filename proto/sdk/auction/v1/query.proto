@@ -1,9 +1,9 @@
 syntax = "proto3";
 package sdk.auction.v1;
 
+import "cosmos/query/v1/query.proto";
 import "gogoproto/gogo.proto";
 import "google/api/annotations.proto";
-import "cosmos/query/v1/query.proto";
 import "sdk/auction/v1/genesis.proto";
 
 option go_package = "github.com/skip-mev/block-sdk/x/auction/types";
@@ -23,7 +23,7 @@ message QueryParamsRequest {}
 // QueryParamsResponse is the response type for the Query/Params RPC method.
 message QueryParamsResponse {
   // Params defines the parameters of the module.
-  Params params = 1 [ (gogoproto.nullable) = false ];
+  Params params = 1 [(gogoproto.nullable) = false];
   // EscrowAddressString is the string representation of the escrow address stored
   // in params.
   string escrow_address_string = 2;

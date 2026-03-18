@@ -1,15 +1,17 @@
 syntax = "proto3";
 package sdk.auction.v1;
 
-import "gogoproto/gogo.proto";
-import "cosmos/base/v1beta1/coin.proto";
 import "amino/amino.proto";
+import "cosmos/base/v1beta1/coin.proto";
 import "cosmos_proto/cosmos.proto";
+import "gogoproto/gogo.proto";
 
 option go_package = "github.com/skip-mev/block-sdk/x/auction/types";
 
 // GenesisState defines the genesis state of the x/auction module.
-message GenesisState { Params params = 1 [ (gogoproto.nullable) = false ]; }
+message GenesisState {
+  Params params = 1 [(gogoproto.nullable) = false];
+}
 
 // Params defines the parameters of the x/auction module.
 message Params {
@@ -24,13 +26,17 @@ message Params {
   bytes escrow_account_address = 2;
 
   // reserve_fee specifies the bid floor for the auction.
-  cosmos.base.v1beta1.Coin reserve_fee = 3
-      [ (gogoproto.nullable) = false, (amino.dont_omitempty) = true ];
+  cosmos.base.v1beta1.Coin reserve_fee = 3 [
+    (gogoproto.nullable) = false,
+    (amino.dont_omitempty) = true
+  ];
 
   // min_bid_increment specifies the minimum amount that the next bid must be
   // greater than the previous bid.
-  cosmos.base.v1beta1.Coin min_bid_increment = 4
-      [ (gogoproto.nullable) = false, (amino.dont_omitempty) = true ];
+  cosmos.base.v1beta1.Coin min_bid_increment = 4 [
+    (gogoproto.nullable) = false,
+    (amino.dont_omitempty) = true
+  ];
 
   // front_running_protection specifies whether front running and sandwich
   // attack protection is enabled.

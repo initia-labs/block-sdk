@@ -2,12 +2,11 @@ syntax = "proto3";
 package sdk.lane.v1;
 
 import "gogoproto/gogo.proto";
-import "cosmos/base/v1beta1/coin.proto";
-import "amino/amino.proto";
-import "cosmos_proto/cosmos.proto";
 import "sdk/lane/v1/types.proto";
 
 option go_package = "github.com/skip-mev/block-sdk/x/lane/types";
 
 // GenesisState defines the genesis state of the x/lane module.
-message GenesisState { Params params = 1 [ (gogoproto.nullable) = false ]; }
+message GenesisState {
+  Params params = 1 [(gogoproto.nullable) = false];
+}
